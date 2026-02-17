@@ -40,7 +40,7 @@ export default function Login() {
           <div className="login-logo-icon">
             <Activity size={28} />
           </div>
-          <h1 className="login-logo-text">ANTI-KARMA</h1>
+          <h1 className="login-logo-text">BETA</h1>
           <p className="login-logo-subtitle">Rapor takip platformu</p>
         </div>
 

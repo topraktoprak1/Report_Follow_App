@@ -1,7 +1,8 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import StatCard from '../components/StatCard';
 import ChartCard from '../components/ChartCard';
-import { userLeaveDetails, userLeaveHistory } from '../data/mockData';
+const userLeaveDetails = [];
+const userLeaveHistory = [];
 import { CalendarDays, Calendar, CalendarCheck, CalendarX } from 'lucide-react';
 
 const totalHak = userLeaveDetails.reduce((s, d) => s + d.hakEdilen, 0);

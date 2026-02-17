@@ -12,7 +12,7 @@ load_dotenv()
 
 # Default values
 DB_USER = 'postgres'
-DB_PASS = 'password'
+DB_PASS = '857587'
 DB_HOST = 'localhost'
 DB_PORT = '5432'
 DB_NAME = 'antikarma_db'
@@ -41,7 +41,7 @@ def create_database(password=None):
         conn = psycopg2.connect(
             dbname='postgres',
             user=DB_USER,
-            password=db_password,
+            password="857587",
             host=DB_HOST,
             port=DB_PORT
         )

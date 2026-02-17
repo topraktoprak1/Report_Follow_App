@@ -7,6 +7,7 @@ class User(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
+    employee_id = db.Column(db.String(50), unique=True, nullable=True)
     password_hash = db.Column(db.String(256), nullable=False)
     first_name = db.Column(db.String(80), nullable=False)
     last_name = db.Column(db.String(80), nullable=False)
@@ -31,6 +32,7 @@ class User(db.Model):
         return {
             'id': self.id,
             'email': self.email,
+            'employeeId': self.employee_id,
             'firstName': self.first_name,
             'lastName': self.last_name,
             'role': self.role,

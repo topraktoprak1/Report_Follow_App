@@ -1,4 +1,4 @@
-import { authorizationRoles, authorizationModules, authorizationMatrix } from '../data/mockData';
+import { authorizationRoles, authorizationModules, authorizationMatrix } from '../config/authorization';
 import { Shield, Check, X, Minus } from 'lucide-react';
 
 export default function YetkilendirmeMatrix() {

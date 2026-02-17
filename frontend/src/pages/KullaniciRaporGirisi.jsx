@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
-import { reportEntries } from '../data/mockData';
+const reportEntries = [];
 
 export default function KullaniciRaporGirisi() {
     const [rowData] = useState(reportEntries);

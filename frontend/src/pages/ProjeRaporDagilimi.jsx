@@ -1,7 +1,9 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
 import ChartCard from '../components/ChartCard';
 import StatCard from '../components/StatCard';
-import { reportDistribution, weeklyDistribution, projectCategories } from '../data/mockData';
+const reportDistribution = [];
+const weeklyDistribution = [];
+const projectCategories = [];
 import { FileText, Layers, CheckCheck, ArrowUpRight } from 'lucide-react';
 
 const COLORS = ['#00d4ff', '#8b5cf6', '#0cdba8', '#f59e0b', '#ef4444'];

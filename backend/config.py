@@ -13,6 +13,7 @@ class Config:
         'postgresql://postgres:password@localhost:5432/antikarma_db'
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    MAX_CONTENT_LENGTH = 200 * 1024 * 1024  # 200 MB max upload size
     
     # JWT
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')

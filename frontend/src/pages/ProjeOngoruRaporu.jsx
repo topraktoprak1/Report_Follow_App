@@ -1,7 +1,7 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts';
 import ChartCard from '../components/ChartCard';
 import StatCard from '../components/StatCard';
-import { forecastData } from '../data/mockData';
+const forecastData = [];
 import { TrendingUp, Target, Calendar, AlertTriangle } from 'lucide-react';
 
 export default function ProjeOngoruRaporu() {

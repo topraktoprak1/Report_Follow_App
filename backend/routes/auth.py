@@ -23,7 +23,7 @@ def login():
     if not user.is_active:
         return jsonify({'error': 'Hesap devre dışı bırakılmış'}), 401
     
-    access_token = create_access_token(identity=user.id)
+    access_token = create_access_token(identity=str(user.id))
     
     return jsonify({
         'token': access_token,

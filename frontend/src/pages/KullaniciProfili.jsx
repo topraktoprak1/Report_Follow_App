@@ -2,7 +2,6 @@ import { useAuth } from '../context/AuthContext';
 import { ROLE_LABELS } from '../config/permissions';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import ChartCard from '../components/ChartCard';
-import { profileActivity } from '../data/mockData';
 import { Mail, Shield, Calendar, Clock, FileText, CheckCircle2 } from 'lucide-react';
 
 export default function KullaniciProfili() {
@@ -49,7 +48,7 @@ export default function KullaniciProfili() {
                                 <FileText size={22} style={{ color: '#00d4ff' }} />
                             </div>
                             <div className="stat-content">
-                                <div className="stat-value">101</div>
+                                <div className="stat-value">0</div>
                                 <div className="stat-label">Toplam Rapor</div>
                             </div>
                         </div>
@@ -58,7 +57,7 @@ export default function KullaniciProfili() {
                                 <CheckCircle2 size={22} style={{ color: '#22c55e' }} />
                             </div>
                             <div className="stat-content">
-                                <div className="stat-value">143</div>
+                                <div className="stat-value">0</div>
                                 <div className="stat-label">Tamamlanan Görev</div>
                             </div>
                         </div>
@@ -67,7 +66,7 @@ export default function KullaniciProfili() {
                                 <Clock size={22} style={{ color: '#8b5cf6' }} />
                             </div>
                             <div className="stat-content">
-                                <div className="stat-value">1,280</div>
+                                <div className="stat-value">0</div>
                                 <div className="stat-label">Toplam MH</div>
                             </div>
                         </div>
@@ -75,7 +74,7 @@ export default function KullaniciProfili() {
 
                     <ChartCard title="Aylık Aktivite" subtitle="Rapor ve görev tamamlama trendi">
                         <ResponsiveContainer width="100%" height={280}>
-                            <LineChart data={profileActivity}>
+                            <LineChart data={[]}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                                 <XAxis dataKey="ay" tick={{ fill: '#8899b4', fontSize: 12 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
                                 <YAxis tick={{ fill: '#8899b4', fontSize: 12 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />

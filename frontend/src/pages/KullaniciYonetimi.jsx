@@ -101,20 +101,21 @@ export default function KullaniciYonetimi() {
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
                             <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                                {['Ad Soyad', 'E-posta', 'Rol', 'Durum', 'Kayıt Tarihi', 'İşlem'].map(h => (
+                                {['Sicil No', 'Ad Soyad', 'E-posta', 'Rol', 'Durum', 'Kayıt Tarihi', 'İşlem'].map(h => (
                                     <th key={h} style={thStyle}>{h}</th>
                                 ))}
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={6} style={{ ...tdStyle, textAlign: 'center', color: 'var(--text-muted)' }}>Yükleniyor...</td></tr>
+                                <tr><td colSpan={7} style={{ ...tdStyle, textAlign: 'center', color: 'var(--text-muted)' }}>Yükleniyor...</td></tr>
                             ) : filtered.length === 0 ? (
-                                <tr><td colSpan={6} style={{ ...tdStyle, textAlign: 'center', color: 'var(--text-muted)' }}>Kullanıcı bulunamadı</td></tr>
+                                <tr><td colSpan={7} style={{ ...tdStyle, textAlign: 'center', color: 'var(--text-muted)' }}>Kullanıcı bulunamadı</td></tr>
                             ) : filtered.map(u => (
                                 <tr key={u.id} style={{ borderBottom: '1px solid var(--border-color)' }}
                                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,212,255,0.03)'}
                                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                    <td style={{ ...tdStyle, fontWeight: 600, color: 'var(--accent-cyan)' }}>{u.employeeId || '-'}</td>
                                     <td style={{ ...tdStyle, fontWeight: 500 }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                             <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--gradient-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, color: 'var(--bg-primary)', flexShrink: 0 }}>

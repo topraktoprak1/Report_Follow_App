@@ -11,7 +11,7 @@ def jwt_required_custom(fn):
     def wrapper(*args, **kwargs):
         verify_jwt_in_request()
         user_id = get_jwt_identity()
-        user = db.session.get(User, user_id)
+        user = db.session.get(User, int(user_id))
         if not user or not user.is_active:
             return jsonify({'error': 'Kullanıcı bulunamadı veya devre dışı'}), 401
         kwargs['current_user'] = user
@@ -26,7 +26,7 @@ def role_required(*roles):
         def wrapper(*args, **kwargs):
             verify_jwt_in_request()
             user_id = get_jwt_identity()
-            user = db.session.get(User, user_id)
+            user = db.session.get(User, int(user_id))
             if not user or not user.is_active:
                 return jsonify({'error': 'Kullanıcı bulunamadı veya devre dışı'}), 401
             if user.role not in roles:

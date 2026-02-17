@@ -44,7 +44,7 @@ export default function Layout() {
                     <div className="sidebar-logo-icon">
                         <Activity size={18} />
                     </div>
-                    <span className="sidebar-logo-text">ANTI-KARMA</span>
+                    <span className="sidebar-logo-text">BETA</span>
                 </div>
 
                 <nav className="sidebar-nav">

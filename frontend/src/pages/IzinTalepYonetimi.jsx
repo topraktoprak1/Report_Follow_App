@@ -1,7 +1,9 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
 import StatCard from '../components/StatCard';
 import ChartCard from '../components/ChartCard';
-import { leaveRequests, leaveStats, leaveMonthly } from '../data/mockData';
+const leaveRequests = [];
+const leaveStats = [];
+const leaveMonthly = [];
 import { CalendarCheck, Clock, CheckCircle2, XCircle } from 'lucide-react';
 
 const STATUS_STYLES = {
