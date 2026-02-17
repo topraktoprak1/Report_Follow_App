@@ -13,4 +13,24 @@ export default defineConfig({
             },
         },
     },
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks(id) {
+                    if (id.includes('node_modules')) {
+                        if (id.includes('ag-grid')) {
+                            return 'ag-grid';
+                        }
+                        if (id.includes('recharts')) {
+                            return 'recharts';
+                        }
+                        if (id.includes('lucide')) {
+                            return 'lucide';
+                        }
+                        return 'vendor';
+                    }
+                }
+            }
+        }
+    }
 });

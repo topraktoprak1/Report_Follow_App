@@ -38,7 +38,7 @@ python app.py
 ```
 
 
-> **Backend URL:** `http://localhost:5000`
+> **Backend URL:** `http://localhost:5174`
 > **Default Admin Credentials:** > - **Email:** `admin@firma.com`
 > * **Password:** `admin123`
 > 

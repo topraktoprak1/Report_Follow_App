@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import StatCard from '../components/StatCard';
 import ChartCard from '../components/ChartCard';
+import { dashboardApi, excelApi } from '../api/excel';
 import { Users, Award, Clock, TrendingUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 
@@ -18,8 +19,6 @@ export default function PersonelAnalizRaporlari() {
                 
                 // Try Excel API first, fallback to mock data
                 try {
-                    const { dashboardApi, excelApi } = await import('../api/excel');
-                    
                     const [pData, summaryStats] = await Promise.all([
                         dashboardApi.getPersonnel(),
                         excelApi.getSummaryStats()
