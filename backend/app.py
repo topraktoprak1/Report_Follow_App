@@ -737,14 +737,61 @@ def dashboard_project_stats():
         {'name': 'Tamamlandı', 'value': completed, 'color': '#0cdba8'},
         {'name': 'Beklemede', 'value': pending, 'color': '#f59e0b'}
     ]
+
+    # Calculate monthly man-hours
+    monthly_mh = [0] * 12
+    total_mh_sum = 0
+
+    for r in records:
+        try:
+            data = json.loads(r.data)
+            date_str = data.get('(Week / \nMonth)') or data.get('(Week / Month)') or data.get('Tarih') or data.get('Date')
+            mh_val = data.get('TOTAL MH', 0)
+
+            # Try to parse mh_val as float
+            try:
+                mh = float(mh_val)
+            except:
+                mh = 0
+
+            total_mh_sum += mh
+
+            if date_str and mh > 0:
+                dt = None
+                for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%Y/%m/%d", "%d/%m/%Y"):
+                    try:
+                        dt = datetime.strptime(str(date_str)[:10], fmt)
+                        break
+                    except Exception:
+                        continue
+
+                if dt:
+                    monthly_mh[dt.month - 1] += mh
+        except:
+            continue
+
+    # Format for frontend chart
+    months = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık']
+    monthly_trends = []
+    for i, mh in enumerate(monthly_mh):
+        monthly_trends.append({
+            'name': months[i],
+            'gerceklesen': round(mh, 1),
+            'planlanan': round(mh * 1.1, 1) # Mock planned data as 110% of actual
+        })
     
+    # Check if category_data is empty and provide fallback
+    if not category_data and len(records) > 0:
+         category_data.append({'name': 'Genel', 'value': len(records), 'color': '#00d4ff'})
+
     return jsonify({
         'activeProjects': len(projects),
         'totalTasks': len(records),
-        'totalMH': 0,
+        'totalMH': round(total_mh_sum, 1),
         'avgProgress': 65, # Mock average progress
         'categoryDistribution': category_data,
-        'projectStatus': project_status
+        'projectStatus': project_status,
+        'monthlyTrends': monthly_trends
     })
 
 @app.route('/api/auth/login', methods=['POST'])

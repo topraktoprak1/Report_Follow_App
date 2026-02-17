@@ -12,6 +12,7 @@ export default function ProjeRaporlama() {
     const [projectData, setProjectData] = useState([]);
     const [projectCategories, setProjectCategories] = useState([]);
     const [projectsList, setProjectsList] = useState([]);
+    const [monthlyTrends, setMonthlyTrends] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -30,6 +31,7 @@ export default function ProjeRaporlama() {
                 });
                 setProjectData(statsData.projectStatus);
                 setProjectCategories(statsData.categoryDistribution);
+                setMonthlyTrends(statsData.monthlyTrends || []);
                 setProjectsList(projects);
             } catch (error) {
                 console.error('Excel veri hatası:', error);
@@ -89,7 +91,27 @@ export default function ProjeRaporlama() {
             </div>
 
             <ChartCard title="Aylık Performans Trendi" subtitle="Gerçekleşen vs Planlanan adam-saat">
-                <div style={{ padding: 20, textAlign: 'center', color: '#8899b4' }}>Veri bulunamadı</div>
+                <ResponsiveContainer width="100%" height={320}>
+                    <AreaChart data={monthlyTrends}>
+                        <defs>
+                            <linearGradient id="colorGerceklesen" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#00d4ff" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="#00d4ff" stopOpacity={0}/>
+                            </linearGradient>
+                            <linearGradient id="colorPlanlanan" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                        <XAxis dataKey="name" tick={{ fill: '#8899b4', fontSize: 12 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                        <YAxis tick={{ fill: '#8899b4', fontSize: 12 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                        <Tooltip contentStyle={{ background: '#111d33', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: '#e8edf5' }} />
+                        <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                        <Area type="monotone" dataKey="gerceklesen" name="Gerçekleşen" stroke="#00d4ff" fillOpacity={1} fill="url(#colorGerceklesen)" />
+                        <Area type="monotone" dataKey="planlanan" name="Planlanan" stroke="#8b5cf6" strokeDasharray="5 5" fillOpacity={1} fill="url(#colorPlanlanan)" />
+                    </AreaChart>
+                </ResponsiveContainer>
             </ChartCard>
 
             <ChartCard title="Proje Listesi" subtitle="Sistemdeki tüm projeler">
