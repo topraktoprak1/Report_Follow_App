@@ -72,7 +72,7 @@ export default function ProjeRaporlama() {
                     </ResponsiveContainer>
                 </ChartCard>
 
-                <ChartCard title="Kategori Dağılımı" subtitle="Proje kategorilerine göre dağılım">
+                <ChartCard title="Disiplin Dağılımı" subtitle="Disipline göre kayıt dağılımı">
                     <ResponsiveContainer width="100%" height={320}>
                         <PieChart>
                             <Pie data={projectCategories} cx="50%" cy="50%" innerRadius={70} outerRadius={110} dataKey="value" nameKey="name">

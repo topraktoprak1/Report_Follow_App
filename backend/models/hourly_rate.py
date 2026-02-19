@@ -8,7 +8,12 @@ class HourlyRate(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     employee_id = db.Column(db.String(50), nullable=False, index=True)
     
-    # Different rate periods
+    # Generic fields for import
+    period = db.Column(db.String(100), nullable=True)  # e.g., "2023-2024", "2025 H1", etc.
+    hourly_rate = db.Column(db.Float, nullable=True)
+    currency = db.Column(db.String(10), nullable=True)
+    
+    # Different rate periods (legacy/specific fields)
     period_2023_2024 = db.Column(db.Float, nullable=True)
     period_2025_h1 = db.Column(db.Float, nullable=True)  # 2025 first half
     period_2025_h2 = db.Column(db.Float, nullable=True)  # 2025 second half

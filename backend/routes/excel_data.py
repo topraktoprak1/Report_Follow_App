@@ -2,11 +2,14 @@
 Excel Data Import Routes
 """
 from flask import Blueprint, request, jsonify, session
-from utils.excel_service import excel_service
 from models import db
+from models.database_record import DatabaseRecord
+from models.employee_info import EmployeeInfo
+from models.hourly_rate import HourlyRate  
 from models.user import User
 from functools import wraps
 from datetime import datetime
+import json
 
 excel_data_bp = Blueprint('excel_data', __name__, url_prefix='/api/excel')
 
@@ -20,22 +23,31 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def _get_all_records_data():
+    """Load all DatabaseRecord rows and parse their JSON data."""
+    records = DatabaseRecord.query.all()
+    parsed = []
+    for r in records:
+        try:
+            data = json.loads(r.data)
+            data['_record_id'] = r.id  # Add internal ID for reference
+            data['_person'] = r.personel  # Add person name
+            parsed.append(data)
+        except Exception as e:
+            print(f"Error parsing record {r.id}: {e}")
+            continue
+    return parsed
+
 @excel_data_bp.route('/import', methods=['POST'])
 @login_required
 def import_excel_data():
-    """Import data from Excel file to database"""
+    """Legacy endpoint - data is now imported via /api/excel/import-all"""
     try:
-        success = excel_service.sync_to_database()
-        if success:
-            return jsonify({
-                'success': True,
-                'message': 'Excel data imported successfully'
-            }), 200
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Failed to import Excel data'
-            }), 500
+        count = DatabaseRecord.query.count()
+        return jsonify({
+            'success': True,
+            'message': f'Database has {count} records. Use /api/excel/upload-preview and /api/excel/import-all for new imports.'
+        }), 200
     except Exception as e:
         return jsonify({
             'success': False,
@@ -47,21 +59,36 @@ def import_excel_data():
 def get_database_records():
     """Get all database records with optional filters"""
     try:
-        # Get query parameters for filtering
+        data = _get_all_records_data()
+        
+        # Apply filters from query parameters
         filters = {}
         for key in ['Company', 'Projects', 'Discipline', 'Nationality', 'Status']:
             value = request.args.get(key.lower())
             if value:
                 filters[key] = value
         
-        records = excel_service.get_all_database_records(filters)
+        # Filter data
+        if filters:
+            filtered = []
+            for record in data:
+                match = True
+                for key, value in filters.items():
+                    record_value = str(record.get(key, '')).lower()
+                    if value.lower() not in record_value:
+                        match = False
+                        break
+                if match:
+                    filtered.append(record)
+            data = filtered
         
         return jsonify({
             'success': True,
-            'records': records,
-            'total': len(records)
+            'records': data,
+            'total': len(data)
         }), 200
     except Exception as e:
+        print(f"Error in get_database_records: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -70,87 +97,57 @@ def get_database_records():
 @excel_data_bp.route('/data/employees', methods=['GET'])
 @login_required
 def get_employee_data():
-    """Get employee information"""
-    print(f"[DEBUG] /data/employees called with id={request.args.get('id')}")
-    
+    """Get employee information from EmployeeInfo table"""
     try:
         employee_id = request.args.get('id')
         
-        # Try Excel service first
-        try:
-            print("[DEBUG] Attempting to fetch from Excel service...")
-            employees = excel_service.get_employee_info(employee_id)
-            if employees:
-                print(f"[DEBUG] Excel service returned {len(employees)} employees")
+        if employee_id:
+            # Get specific employee
+            info = EmployeeInfo.query.filter_by(employee_id=employee_id).first()
+            if info:
+                user = User.query.get(info.user_id) if info.user_id else None
+                employee_data = {
+                    'ID': info.employee_id,
+                    'Name Surname': f"{user.first_name} {user.last_name}" if user else info.employee_id,
+                    'Company': info.company,
+                    'Nationality': info.nationality,
+                    'Title': info.title,
+                    'Function': info.function,
+                    'Discipline': info.discipline,
+                    'Projects': info.projects,
+                    'Reporting': info.reporting_manager
+                }
                 return jsonify({
                     'success': True,
-                    'employees': employees,
-                    'total': len(employees)
+                    'employees': [employee_data],
+                    'total': 1
                 }), 200
-            else:
-                print("[DEBUG] Excel service returned empty list")
-        except Exception as e:
-            print(f"[WARNING] Excel service failed: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        # Return mock data as fallback
-        print("[DEBUG] Using mock employee data as fallback")
-        mock_employees = [
-            {
-                'ID': 1,
-                'Name': 'Ahmet Yılmaz',
-                'Name Surname': 'Ahmet Yılmaz', 
-                'Company': 'TechCorp',
-                'Nationality': 'Turkish',
-                'Discipline': 'CONCRETE DESIGN',
-                'FILYOS FPU\nTitle': 'Senior Engineer',
-                'Title': 'Senior Engineer',
-                'Function': 'Engineering',
-                'Projects': 'Project Alpha',
-                'Reporting': 'John Doe'
-            },
-            {
-                'ID': 2,
-                'Name': 'Mehmet Kaya',
-                'Name Surname': 'Mehmet Kaya',
-                'Company': 'TechCorp', 
-                'Nationality': 'Turkish',
-                'Discipline': 'STEEL DESIGN',
-                'FILYOS FPU\nTitle': 'Engineer',
-                'Title': 'Engineer',
-                'Function': 'Engineering',
-                'Projects': 'Project Beta',
-                'Reporting': 'Jane Smith'
-            },
-            {
-                'ID': 3,
-                'Name': 'Ayşe Demir',
-                'Name Surname': 'Ayşe Demir',
-                'Company': 'TechCorp',
-                'Nationality': 'Turkish',
-                'Discipline': 'PROJECT MANAGEMENT',
-                'FILYOS FPU\nTitle': 'Project Manager',
-                'Title': 'Project Manager', 
-                'Function': 'Management',
-                'Projects': 'Project Gamma',
-                'Reporting': 'CEO'
-            }
-        ]
-        
-        print(f"[DEBUG] Returning {len(mock_employees)} mock employees")
-        response = jsonify({
-            'success': True,
-            'employees': mock_employees,
-            'total': len(mock_employees)
-        })
-        print(f"[DEBUG] Response created successfully")
-        return response, 200
-        
+        else:
+            # Get all employees
+            infos = EmployeeInfo.query.all()
+            employees = []
+            for info in infos:
+                user = User.query.get(info.user_id) if info.user_id else None
+                employees.append({
+                    'ID': info.employee_id,
+                    'Name Surname': f"{user.first_name} {user.last_name}" if user else info.employee_id,
+                    'Company': info.company,
+                    'Nationality': info.nationality,
+                    'Title': info.title,
+                    'Function': info.function,
+                    'Discipline': info.discipline,
+                    'Projects': info.projects,
+                    'Reporting': info.reporting_manager
+                })
+            
+            return jsonify({
+                'success': True,
+                'employees': employees,
+                'total': len(employees)
+            }), 200
+            
     except Exception as e:
-        print(f"[ERROR] Exception in get_employee_data: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Error in get_employee_data: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -162,14 +159,30 @@ def get_hourly_rates_data():
     """Get hourly rates information"""
     try:
         employee_id = request.args.get('id')
-        rates = excel_service.get_hourly_rates(employee_id)
+        
+        if employee_id:
+            rates = HourlyRate.query.filter_by(employee_id=employee_id).all()
+        else:
+            rates = HourlyRate.query.all()
+        
+        rates_data = []
+        for rate in rates:
+            rates_data.append({
+                'employee_id': rate.employee_id,
+                'period': rate.period,
+                'hourly_rate': rate.hourly_rate,
+                'currency': rate.currency,
+                'contract_type': rate.contract_type,
+                'company': rate.company
+            })
         
         return jsonify({
             'success': True,
-            'rates': rates,
-            'total': len(rates)
+            'rates': rates_data,
+            'total': len(rates_data)
         }), 200
     except Exception as e:
+        print(f"Error in get_hourly_rates_data: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -178,17 +191,29 @@ def get_hourly_rates_data():
 @excel_data_bp.route('/data/projects', methods=['GET'])
 @login_required
 def get_project_data():
-    """Get project-specific data"""
+    """Get unique projects from database records"""
     try:
+        data = _get_all_records_data()
         project_name = request.args.get('name')
-        projects = excel_service.get_project_data(project_name)
+        
+        if project_name:
+            # Filter by project name
+            data = [r for r in data if str(r.get('Projects', '')).lower() == project_name.lower()]
+        
+        # Get unique projects
+        projects = set()
+        for record in data:
+            p = record.get('Projects', '')
+            if p:
+                projects.add(str(p))
         
         return jsonify({
             'success': True,
-            'projects': projects,
+            'projects': list(projects),
             'total': len(projects)
         }), 200
     except Exception as e:
+        print(f"Error in get_project_data: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -197,17 +222,28 @@ def get_project_data():
 @excel_data_bp.route('/data/companies', methods=['GET'])
 @login_required
 def get_company_data():
-    """Get company-specific data"""
+    """Get unique companies from database records"""
     try:
-        company = request.args.get('name')
-        companies = excel_service.get_company_data(company)
+        data = _get_all_records_data()
+        company_name = request.args.get('name')
+        
+        if company_name:
+            data = [r for r in data if str(r.get('Company', '')).lower() == company_name.lower()]
+        
+        # Get unique companies
+        companies = set()
+        for record in data:
+            c = record.get('Company', '')
+            if c:
+                companies.add(str(c))
         
         return jsonify({
             'success': True,
-            'companies': companies,
+            'companies': list(companies),
             'total': len(companies)
         }), 200
     except Exception as e:
+        print(f"Error in get_company_data: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -216,17 +252,28 @@ def get_company_data():
 @excel_data_bp.route('/data/disciplines', methods=['GET'])
 @login_required
 def get_discipline_data():
-    """Get discipline-specific data"""
+    """Get unique disciplines from database records"""
     try:
-        discipline = request.args.get('name')
-        disciplines = excel_service.get_discipline_data(discipline)
+        data = _get_all_records_data()
+        discipline_name = request.args.get('name')
+        
+        if discipline_name:
+            data = [r for r in data if str(r.get('Discipline', '')).lower() == discipline_name.lower()]
+        
+        # Get unique disciplines
+        disciplines = set()
+        for record in data:
+            d = record.get('Discipline', '')
+            if d:
+                disciplines.add(str(d))
         
         return jsonify({
             'success': True,
-            'disciplines': disciplines,
+            'disciplines': list(disciplines),
             'total': len(disciplines)
         }), 200
     except Exception as e:
+        print(f"Error in get_discipline_data: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -235,74 +282,63 @@ def get_discipline_data():
 @excel_data_bp.route('/data/summary', methods=['GET'])
 @login_required
 def get_summary_stats():
-    """Get summary statistics"""
+    """Get summary statistics from database records"""
     try:
-        # Try Excel service first
-        try:
-            stats = excel_service.get_summary_stats()
-            if stats.get('total_records', 0) > 0:
-                return jsonify({
-                    'success': True,
-                    'stats': stats
-                }), 200
-        except Exception as e:
-            print(f"[WARNING] Excel summary failed: {e}")
+        data = _get_all_records_data()
         
-        # Return mock stats as fallback
-        mock_stats = {
-            'total_records': 21071,
-            'total_cost': 1106022.82,
-            'total_hours': 1250,
-            'active_projects': 15,
-            'projects': ['Project Alpha', 'Project Beta', 'Project Gamma'],
-            'companies': ['TechCorp', 'EngineeringLtd', 'ConstructCo'],
-            'disciplines': ['CONCRETE DESIGN', 'STEEL DESIGN', 'PROJECT MANAGEMENT']
+        if not data:
+            return jsonify({
+                'success': True,
+                'stats': {
+                    'total_records': 0,
+                    'total_cost': 0,
+                    'total_hours': 0,
+                    'active_projects': 0,
+                    'projects': [],
+                    'companies': [],
+                    'disciplines': []
+                }
+            }), 200
+        
+        total_hours = 0
+        total_cost = 0
+        projects_set = set()
+        companies_set = set()
+        disciplines_set = set()
+        
+        for r in data:
+            try:
+                total_hours += float(r.get('TOTAL\n MH') or r.get('TOTAL MH') or 0)
+            except:
+                pass
+            try:
+                total_cost += float(r.get('General Total\n Cost (USD)') or 0)
+            except:
+                pass
+            p = r.get('Projects', '')
+            if p: projects_set.add(str(p))
+            c = r.get('Company', '')
+            if c: companies_set.add(str(c))
+            d = r.get('Discipline', '')
+            if d: disciplines_set.add(str(d))
+        
+        stats = {
+            'total_records': len(data),
+            'total_cost': round(total_cost, 2),
+            'total_hours': round(total_hours, 1),
+            'active_projects': len(projects_set),
+            'projects': list(projects_set)[:10],
+            'companies': list(companies_set),
+            'disciplines': list(disciplines_set)
         }
         
         return jsonify({
             'success': True,
-            'stats': mock_stats
+            'stats': stats
         }), 200
         
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@excel_data_bp.route('/data/monthly/<int:year>', methods=['GET'])
-@login_required
-def get_monthly_data(year):
-    """Get monthly data for charts"""
-    try:
-        monthly_data = excel_service.get_monthly_data(year)
-        
-        return jsonify({
-            'success': True,
-            'monthlyData': monthly_data,
-            'year': year
-        }), 200
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@excel_data_bp.route('/search', methods=['GET'])
-@login_required
-def search_records():
-    """Search records across all fields"""
-    try:
-        search_term = request.args.get('q', '')
-        records = excel_service.search_records(search_term)
-        
-        return jsonify({
-            'success': True,
-            'records': records,
-            'total': len(records),
-            'searchTerm': search_term
-        }), 200
-    except Exception as e:
+        print(f"Error in get_summary_stats: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -311,34 +347,26 @@ def search_records():
 @excel_data_bp.route('/data/status', methods=['GET'])
 @login_required
 def get_data_status():
-    """Get status of Excel data and last sync time"""
+    """Get status of imported data"""
     try:
-        # Check if Excel file exists
-        import os
-        excel_path = excel_service.get_file_path()
-        file_exists = os.path.exists(excel_path)
-        
-        # Get file modification time
-        last_modified = None
-        if file_exists:
-            last_modified = os.path.getmtime(excel_path)
-            last_modified = datetime.fromtimestamp(last_modified).isoformat()
-        
-        # Get summary stats
-        stats = excel_service.get_summary_stats()
+        record_count = DatabaseRecord.query.count()
+        user_count = User.query.filter(User.role != 'admin').count()
+        info_count = EmployeeInfo.query.count()
+        # Use direct count query instead of model query to avoid metadata issues
+        rate_count = db.session.execute(db.text("SELECT COUNT(*) FROM hourly_rates")).scalar()
         
         return jsonify({
             'success': True,
-            'status': {
-                'fileExists': file_exists,
-                'filePath': excel_path,
-                'lastModified': last_modified,
-                'cacheAge': excel_service._last_loaded.isoformat() if excel_service._last_loaded else None,
-                'totalRecords': stats.get('total_records', 0)
-            }
+            'hasData': record_count > 0,
+            'recordCount': record_count,
+            'userCount': user_count,
+            'infoCount': info_count,
+            'rateCount': rate_count
         }), 200
     except Exception as e:
+        print(f"Error in get_data_status: {e}")
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': str(e),
+            'hasData': False
         }), 500

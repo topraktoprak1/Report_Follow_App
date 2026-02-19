@@ -7,6 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 export default function PersonelAnalizRaporlari() {
     const [personnel, setPersonnel] = useState([]);
+    const [projects, setProjects] = useState([]);
     const [deptStats, setDeptStats] = useState([]);
     const [stats, setStats] = useState({ totalPersonnel: 0, avgPerformance: 0, totalMH: 0, completedTasks: 0 });
     const [loading, setLoading] = useState(true);
@@ -16,15 +17,24 @@ export default function PersonelAnalizRaporlari() {
         const fetchData = async () => {
             try {
                 setError(null);
-                
+
                 // Try Excel API first, fallback to mock data
                 try {
-                    const [pData, summaryStats] = await Promise.all([
+                    const [pData, summaryStats, projData] = await Promise.all([
                         dashboardApi.getPersonnel(),
-                        excelApi.getSummaryStats()
+                        excelApi.getSummaryStats(),
+                        dashboardApi.getProjects()
                     ]);
 
                     setPersonnel(pData);
+
+                    // Normalize project totalMH to 0-100 performance score
+                    const maxMH = projData.reduce((m, p) => Math.max(m, p.totalMH || 0), 1);
+                    const projWithScore = projData.map(p => ({
+                        ...p,
+                        performance: Math.round(((p.totalMH || 0) / maxMH) * 100)
+                    }));
+                    setProjects(projWithScore);
 
                     if (summaryStats.success) {
                         const s = summaryStats.stats;
@@ -38,7 +48,7 @@ export default function PersonelAnalizRaporlari() {
                         // Create department statistics from personnel data
                         const deptCounts = {};
                         const deptPerformance = {};
-                        
+
                         pData.forEach(p => {
                             const dept = p.department || 'Other';
                             deptCounts[dept] = (deptCounts[dept] || 0) + 1;
@@ -58,126 +68,8 @@ export default function PersonelAnalizRaporlari() {
                         throw new Error('Excel stats failed');
                     }
                 } catch (excelError) {
-                    console.warn('Excel API failed, using mock data:', excelError.message);
-                    
-                    // Fallback to mock data
-                    const mockPersonnel = [
-                        { 
-                            id: 1, 
-                            name: 'Ahmet Yılmaz', 
-                            ad: 'Ahmet Yılmaz', 
-                            department: 'Mühendislik', 
-                            departman: 'Mühendislik', 
-                            pozisyon: 'Sr. Mühendis', 
-                            performance: 85, 
-                            performans: 85, 
-                            toplamMH: 120, 
-                            tamamlanan: 15 
-                        },
-                        { 
-                            id: 2, 
-                            name: 'Mehmet Kaya', 
-                            ad: 'Mehmet Kaya', 
-                            department: 'Mühendislik', 
-                            departman: 'Mühendislik', 
-                            pozisyon: 'Mühendis', 
-                            performance: 78, 
-                            performans: 78, 
-                            toplamMH: 95, 
-                            tamamlanan: 12 
-                        },
-                        { 
-                            id: 3, 
-                            name: 'Ayşe Demir', 
-                            ad: 'Ayşe Demir', 
-                            department: 'İnsan Kaynakları', 
-                            departman: 'İnsan Kaynakları', 
-                            pozisyon: 'İK Uzmanı', 
-                            performance: 92, 
-                            performans: 92, 
-                            toplamMH: 80, 
-                            tamamlanan: 18 
-                        },
-                        { 
-                            id: 4, 
-                            name: 'Fatma Özkan', 
-                            ad: 'Fatma Özkan', 
-                            department: 'Finans', 
-                            departman: 'Finans', 
-                            pozisyon: 'Mali Müşavir', 
-                            performance: 88, 
-                            performans: 88, 
-                            toplamMH: 75, 
-                            tamamlanan: 14 
-                        },
-                        { 
-                            id: 5, 
-                            name: 'Ali Çelik', 
-                            ad: 'Ali Çelik', 
-                            department: 'Mühendislik', 
-                            departman: 'Mühendislik', 
-                            pozisyon: 'Jr. Mühendis', 
-                            performance: 76, 
-                            performans: 76, 
-                            toplamMH: 110, 
-                            tamamlanan: 11 
-                        },
-                        { 
-                            id: 6, 
-                            name: 'Zeynep Arslan', 
-                            ad: 'Zeynep Arslan', 
-                            department: 'Pazarlama', 
-                            departman: 'Pazarlama', 
-                            pozisyon: 'Pazarlama Uzmanı', 
-                            performance: 83, 
-                            performans: 83, 
-                            toplamMH: 65, 
-                            tamamlanan: 13 
-                        },
-                    ];
-
-                    const mockDeptStats = [
-                        { 
-                            name: 'Mühendislik', 
-                            departman: 'Mühendislik', 
-                            value: 3, 
-                            percentage: 50, 
-                            ortalama: 80 
-                        },
-                        { 
-                            name: 'İnsan Kaynakları', 
-                            departman: 'İnsan Kaynakları', 
-                            value: 1, 
-                            percentage: 17, 
-                            ortalama: 92 
-                        },
-                        { 
-                            name: 'Finans', 
-                            departman: 'Finans', 
-                            value: 1, 
-                            percentage: 17, 
-                            ortalama: 88 
-                        },
-                        { 
-                            name: 'Pazarlama', 
-                            departman: 'Pazarlama', 
-                            value: 1, 
-                            percentage: 17, 
-                            ortalama: 83 
-                        },
-                    ];
-
-                    setPersonnel(mockPersonnel);
-                    setDeptStats(mockDeptStats);
-                    setStats({
-                        totalPersonnel: mockPersonnel.length,
-                        avgPerformance: Math.round(mockPersonnel.reduce((sum, p) => sum + p.performance, 0) / mockPersonnel.length),
-                        totalMH: 1250,
-                        completedTasks: 45
-                    });
-                    
-                    console.log('Mock data set - Personnel:', mockPersonnel);
-                    console.log('Mock data set - DeptStats:', mockDeptStats);
+                    console.warn('Data fetch failed:', excelError.message);
+                    setError('Veri yüklenemedi. Lütfen Excel dosyasının yüklendiğinden emin olun.');
                 }
             } catch (error) {
                 console.error('Veri çekme hatası:', error);
@@ -201,8 +93,8 @@ export default function PersonelAnalizRaporlari() {
         <div className="page-container">
             <div style={{ textAlign: 'center', padding: '50px' }}>
                 <div style={{ fontSize: '18px', color: '#ef4444' }}>{error}</div>
-                <button 
-                    onClick={() => window.location.reload()} 
+                <button
+                    onClick={() => window.location.reload()}
                     style={{ marginTop: '20px', padding: '10px 20px', backgroundColor: '#00d4ff', color: 'white', border: 'none', borderRadius: '5px' }}
                 >
                     Yeniden Dene
@@ -231,14 +123,17 @@ export default function PersonelAnalizRaporlari() {
             </div>
 
             <div className="charts-grid">
-                <ChartCard title="Personel Performans Karşılaştırması" subtitle="Bireysel performans skorları">
+                <ChartCard title="Proje Performans Karşılaştırması" subtitle="Proje bazlı toplam adam-saat (MH)">
                     <ResponsiveContainer width="100%" height={320}>
-                        <BarChart data={personnel} layout="vertical">
+                        <BarChart data={projects} layout="vertical">
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                            <XAxis type="number" domain={[0, 100]} tick={{ fill: '#8899b4', fontSize: 12 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
-                            <YAxis dataKey="name" type="category" width={130} tick={{ fill: '#8899b4', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
-                            <Tooltip contentStyle={{ background: '#111d33', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: '#e8edf5' }} />
-                            <Bar dataKey="performance" name="Performans (%)" fill="#00d4ff" radius={[0, 4, 4, 0]} barSize={20} />
+                            <XAxis type="number" tick={{ fill: '#8899b4', fontSize: 12 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                            <YAxis dataKey="name" type="category" width={150} tick={{ fill: '#8899b4', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                            <Tooltip
+                                contentStyle={{ background: '#111d33', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: '#e8edf5' }}
+                                formatter={(value, name) => [value, name === 'totalMH' ? 'Toplam MH' : name]}
+                            />
+                            <Bar dataKey="totalMH" name="Toplam MH" fill="#00d4ff" radius={[0, 4, 4, 0]} barSize={20} />
                         </BarChart>
                     </ResponsiveContainer>
                 </ChartCard>

@@ -459,8 +459,10 @@ FAVORITES_FILE_PATH = os.path.join(os.path.dirname(__file__), 'favorite_reports.
 # Register Blueprints
 from routes.excel_upload import excel_bp
 from routes.excel_data import excel_data_bp
+from routes.dashboard import dashboard_bp
 app.register_blueprint(excel_bp)
 app.register_blueprint(excel_data_bp)
+app.register_blueprint(dashboard_bp)
 
 # ============================================================================
 # EXCEL FORMULA CALCULATION FUNCTIONS
@@ -633,119 +635,12 @@ def load_excel_data(file_path, user_filter=None):
         except:
             return pd.DataFrame()
 
-# API Endpoints for frontend integration
+# ============================================================================
+# EXCEL FORMULA CALCULATION FUNCTIONS (Legacy - for reference)
+# ============================================================================
 
-@app.route('/api/dashboard/stats', methods=['GET'])
-def dashboard_stats():
-    """Compatibility endpoint for dashboard stats"""
-    records = DatabaseRecord.query.all()
-    count = len(records)
-    # Mock data for now based on record count
-    return jsonify({
-        'activeProjects': 5, # Placeholder
-        'totalTasks': count,
-        'totalMH': 0,
-        'avgProgress': 0
-    })
-
-@app.route('/api/dashboard/personnel', methods=['GET'])
-def dashboard_personnel():
-    """Compatibility endpoint for personnel list"""
-    records = DatabaseRecord.query.all()
-    personnel_list = []
-    seen = set()
-    
-    for r in records:
-        try:
-            data = json.loads(r.data)
-            name = data.get('Name Surname', '') or data.get('PERSONEL', '')
-            if name and name not in seen:
-                seen.add(name)
-                personnel_list.append({
-                    'id': r.id,
-                    'name': name,
-                    'department': data.get('Discipline', 'Unknown'),
-                    'role': data.get('Title', 'Employee'),
-                    'performance': 0
-                })
-        except:
-            continue
-            
-    return jsonify(personnel_list)
-
-@app.route('/api/dashboard/projects', methods=['GET'])
-def dashboard_projects():
-    """Compatibility endpoint for projects list"""
-    records = DatabaseRecord.query.all()
-    projects = set()
-    
-    for r in records:
-        try:
-            data = json.loads(r.data)
-            p_name = data.get('Projects', '')
-            if p_name:
-                projects.add(p_name)
-        except:
-            continue
-            
-    result = [{'name': p, 'status': 'Active', 'completion': 0} for p in projects]
-    return jsonify(result)
-
-@app.route('/api/dashboard/project-stats', methods=['GET'])
-def dashboard_project_stats():
-    """Compatibility endpoint for project stats"""
-    records = DatabaseRecord.query.all()
-    
-    projects = set()
-    disciplines = {}
-    
-    for r in records:
-        try:
-            data = json.loads(r.data)
-            p_name = data.get('Projects', '')
-            disc = data.get('Discipline', 'Other')
-            
-            if p_name:
-                projects.add(p_name)
-            
-            if disc:
-                disciplines[disc] = disciplines.get(disc, 0) + 1
-        except:
-            continue
-            
-    # Color palette for charts
-    colors = ['#00d4ff', '#8b5cf6', '#0cdba8', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#14b8a6', '#f97316', '#a855f7']
-    
-    # Format category data with colors
-    category_data = []
-    for i, (k, v) in enumerate(disciplines.items()):
-        category_data.append({
-            'name': k,
-            'value': v,
-            'color': colors[i % len(colors)]
-        })
-    
-    # Mock project status distribution (since we don't have status in DB yet)
-    # We'll distribute the count of unique projects across statuses
-    total_projects = len(projects)
-    active = int(total_projects * 0.6)
-    completed = int(total_projects * 0.3)
-    pending = total_projects - active - completed
-    
-    project_status = [
-        {'name': 'Devam Ediyor', 'value': active, 'color': '#00d4ff'},
-        {'name': 'Tamamlandı', 'value': completed, 'color': '#0cdba8'},
-        {'name': 'Beklemede', 'value': pending, 'color': '#f59e0b'}
-    ]
-    
-    return jsonify({
-        'activeProjects': len(projects),
-        'totalTasks': len(records),
-        'totalMH': 0,
-        'avgProgress': 65, # Mock average progress
-        'categoryDistribution': category_data,
-        'projectStatus': project_status
-    })
+# Note: These functions are kept for reference but actual data now comes from
+# DatabaseRecord table after import. The import process stores all data in JSON format.
 
 @app.route('/api/auth/login', methods=['POST'])
 def auth_login():
@@ -819,11 +714,22 @@ def list_users():
     """List users adapter"""
     users = User.query.all()
     user_list = []
+    import re as _re
+    def _clean(first, last):
+        if _re.match(r'^User_\S+$', first or ''):
+            parts = (last or '').split(maxsplit=1)
+            if parts:
+                first, last = parts[0], (parts[1] if len(parts) > 1 else '')
+            else:
+                first = ''
+        return first.strip(), last.strip()
+
     for u in users:
+        fn, ln = _clean(u.first_name, u.last_name)
         user_list.append({
             'id': u.id,
-            'firstName': u.first_name,
-            'lastName': u.last_name,
+            'firstName': fn,
+            'lastName': ln,
             'email': u.email,
             'role': u.role,
             'isActive': u.is_active,
@@ -837,9 +743,35 @@ def list_users():
     return jsonify({'users': user_list})
 
 
+@app.route('/api/fix-user-names', methods=['POST'])
+def fix_user_names():
+    """One-time cleanup: fix users where first_name is a numeric value."""
+    def is_numeric(s):
+        try:
+            float(s)
+            return True
+        except:
+            return False
+    
+    users = User.query.all()
+    fixed_count = 0
+    
+    for u in users:
+        if u.first_name and is_numeric(u.first_name.strip()):
+            # first_name is numeric — extract real name from last_name
+            if u.last_name:
+                parts = u.last_name.split(maxsplit=1)
+                u.first_name = parts[0]
+                u.last_name = parts[1] if len(parts) >= 2 else '-'
+                fixed_count += 1
+    
+    db.session.commit()
+    return jsonify({'message': f'{fixed_count} kullanıcı adı düzeltildi', 'fixedCount': fixed_count})
+
+
 if __name__ == '__main__':
     with app.app_context():
         init_db()
     
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
-    app.run(debug=debug_mode, host='0.0.0.0', port=5174)
+    app.run(debug=debug_mode, host='0.0.0.0', port=5174, threaded=True)

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { AlertCircle, Bell, CheckCircle, ChevronDown, ChevronUp, Database, FileSpreadsheet, Globe, Loader2, Moon, Save, Settings, Shield, Trash2, Upload, Users, DownloadCloud } from 'lucide-react';
 import client from '../api/client';
@@ -35,7 +35,7 @@ export default function SistemAyarlari() {
     const fileInputRef = useRef(null);
 
     // Load Excel data status on component mount
-    useState(() => {
+    useEffect(() => {
         const loadDataStatus = async () => {
             try {
                 const status = await excelApi.getDataStatus();
@@ -562,20 +562,41 @@ export default function SistemAyarlari() {
                                     <CheckCircle size={18} style={{ color: '#22c55e' }} />
                                     <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{importResult.message}</span>
                                 </div>
-                                <div style={{ display: 'flex', gap: 20, fontSize: '0.85rem' }}>
-                                    <span style={{ color: '#22c55e' }}>✅ Kullanıcı: <strong>{importResult.stats?.users?.imported || 0}</strong></span>
-                                    {importResult.stats?.users?.skipped > 0 && <span style={{ color: '#fbbf24' }}>⏭️ Kullanıcı (Atlanan): <strong>{importResult.stats.users.skipped}</strong></span>}
-                                    <span style={{ color: '#3b82f6' }}>ℹ️ Bilgi: <strong>{importResult.stats?.info?.imported || 0}</strong></span>
-                                    <span style={{ color: '#8b5cf6' }}>💰 Saat Ücreti: <strong>{importResult.stats?.rates?.imported || 0}</strong></span>
+                                <div style={{ display: 'flex', gap: 20, fontSize: '0.85rem', flexWrap: 'wrap' }}>
+                                    {importResult.stats?.database_records?.imported > 0 && (
+                                        <span style={{ color: '#22c55e', fontSize: '0.9rem', fontWeight: 600 }}>📊 Çalışma Kayıtları: <strong>{importResult.stats.database_records.imported}</strong></span>
+                                    )}
+                                    {importResult.stats?.users?.imported > 0 && (
+                                        <span style={{ color: '#22c55e' }}>✅ Kullanıcı: <strong>{importResult.stats.users.imported}</strong></span>
+                                    )}
+                                    {importResult.stats?.users?.updated > 0 && (
+                                        <span style={{ color: '#3b82f6' }}>🔄 Kullanıcı (Güncellendi): <strong>{importResult.stats.users.updated}</strong></span>
+                                    )}
+                                    {importResult.stats?.users?.skipped > 0 && (
+                                        <span style={{ color: '#fbbf24' }}>⏭️ Kullanıcı (Atlanan): <strong>{importResult.stats.users.skipped}</strong></span>
+                                    )}
+                                    {importResult.stats?.info?.imported > 0 && (
+                                        <span style={{ color: '#22c55e' }}>ℹ️ Bilgi: <strong>{importResult.stats.info.imported}</strong></span>
+                                    )}
+                                    {importResult.stats?.info?.updated > 0 && (
+                                        <span style={{ color: '#3b82f6' }}>🔄 Bilgi (Güncellendi): <strong>{importResult.stats.info.updated}</strong></span>
+                                    )}
+                                    {importResult.stats?.rates?.imported > 0 && (
+                                        <span style={{ color: '#22c55e' }}>💰 Saat Ücreti: <strong>{importResult.stats.rates.imported}</strong></span>
+                                    )}
+                                    {importResult.stats?.rates?.updated > 0 && (
+                                        <span style={{ color: '#3b82f6' }}>🔄 Saat Ücreti (Güncellendi): <strong>{importResult.stats.rates.updated}</strong></span>
+                                    )}
                                 </div>
                                 {importResult.errors?.length > 0 && (
                                     <div style={{ marginTop: 10, fontSize: '0.8rem', color: '#ef4444' }}>
                                         Hatalar: {[
+                                            ...(importResult.stats?.database_records?.errors || []),
                                             ...(importResult.stats?.users?.errors || []),
                                             ...(importResult.stats?.info?.errors || []),
                                             ...(importResult.stats?.rates?.errors || [])
                                         ].slice(0, 5).join(', ')}
-                                        {((importResult.stats?.users?.errors?.length || 0) + (importResult.stats?.info?.errors?.length || 0) + (importResult.stats?.rates?.errors?.length || 0)) > 5 && '... ve fazlası'}
+                                        {((importResult.stats?.database_records?.errors?.length || 0) + (importResult.stats?.users?.errors?.length || 0) + (importResult.stats?.info?.errors?.length || 0) + (importResult.stats?.rates?.errors?.length || 0)) > 5 && '... ve fazlası'}
                                     </div>
                                 )}
                             </div>

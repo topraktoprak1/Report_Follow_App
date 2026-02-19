@@ -1,10 +1,25 @@
 import os
+import re
 import tempfile
 # import pandas as pd (moved to functions)
 from flask import Blueprint, request, jsonify, session
 from functools import wraps
 from models import db
 from models.user import User
+
+
+def clean_name(name_str):
+    """Remove leading numeric prefixes from names imported from Excel.
+    E.g. '7.0 Sedat Ertuğrul Özdilek' -> 'Sedat Ertuğrul Özdilek'
+         '131.94930000000002 Elif Ayan Aktimur' -> 'Elif Ayan Aktimur'
+         '0.0 Gülçe Hazal Ak' -> 'Gülçe Hazal Ak'
+    """
+    if not name_str or not isinstance(name_str, str):
+        return name_str
+    # Strip leading numbers (int or float patterns) followed by whitespace
+    cleaned = re.sub(r'^\d+\.?\d*\s+', '', name_str.strip())
+    return cleaned if cleaned else name_str
+
 
 excel_bp = Blueprint('excel', __name__, url_prefix='/api/excel')
 
@@ -220,8 +235,9 @@ def import_all_data(current_user):
 
     stats = {
         'users': {'imported': 0, 'updated': 0, 'skipped': 0, 'errors': []},
-        'info': {'imported': 0, 'skipped': 0, 'errors': []},
-        'rates': {'imported': 0, 'skipped': 0, 'errors': []}
+        'database_records': {'imported': 0, 'errors': []},
+        'info': {'imported': 0, 'updated': 0, 'errors': []},
+        'rates': {'imported': 0, 'updated': 0, 'errors': []}
     }
 
     try:
@@ -255,16 +271,29 @@ def import_all_data(current_user):
                 val = str(row[col]).strip() if pd.notna(row[col]) else ''
                 if not val: continue
                 
+                # Skip values that are purely numeric (e.g. hourly rates like 7.0, 131.949...)
+                try:
+                    float(val)
+                    continue  # This is a number, not a name
+                except ValueError:
+                    pass
+                
                 if any(k in col_lower for k in ['first', 'ad', 'isim']) and 'soyad' not in col_lower:
-                    first_name = val
+                    first_name = clean_name(val)
                 elif any(k in col_lower for k in ['last', 'soyad', 'surname']):
-                    last_name = val
+                    last_name = clean_name(val)
             
             # Fallback to single Name column
             if not first_name and not last_name:
                 for col in df_db.columns:
                     if 'name' in col.lower() or 'ad' in col.lower():
-                        full_name = str(row[col]).strip()
+                        raw_val = str(row[col]).strip()
+                        try:
+                            float(raw_val)
+                            continue  # Skip numeric columns
+                        except ValueError:
+                            pass
+                        full_name = clean_name(raw_val)
                         parts = full_name.split(maxsplit=1)
                         if len(parts) >= 2:
                             first_name, last_name = parts[0], parts[1]
@@ -272,12 +301,38 @@ def import_all_data(current_user):
                             first_name, last_name = parts[0], '-'
                         break
             
+            # Safety check: if first_name is numeric or a User_XXXXX placeholder, fix it
+            if first_name:
+                is_numeric = False
+                try:
+                    float(first_name)
+                    is_numeric = True
+                except ValueError:
+                    pass
+                import re as _re
+                is_placeholder = bool(_re.match(r'^User_\S+$', first_name))
+                if is_numeric or is_placeholder:
+                    # last_name likely has the real full name
+                    if last_name and last_name != '-':
+                        parts = last_name.split(maxsplit=1)
+                        first_name = parts[0]
+                        last_name = parts[1] if len(parts) >= 2 else '-'
+                    else:
+                        first_name = f'User_{person_id}'
+            
             if not first_name: first_name = f'User_{person_id}'
             if not last_name: last_name = '-'
 
             if user:
-                # Update existing user if needed (optional, currently skipping updates)
-                stats['users']['skipped'] += 1
+                # Update existing user
+                try:
+                    user.first_name = first_name
+                    user.last_name = last_name
+                    if not user.is_active:
+                        user.is_active = True
+                    stats['users']['updated'] += 1
+                except Exception as e:
+                    stats['users']['errors'].append(f'ID {person_id} (güncelleme): {str(e)}')
             else:
                 try:
                     # Create new user
@@ -302,6 +357,77 @@ def import_all_data(current_user):
         db.session.commit()  # Commit users so we can link info/rates
 
         # ==========================================
+        # 1.5. IMPORT DATABASE RECORDS (All rows from DATABASE sheet)
+        # ==========================================
+        from models.database_record import DatabaseRecord
+        import json
+        
+        # First, clear existing database records to avoid duplicates
+        try:
+            num_deleted = db.session.query(DatabaseRecord).delete()
+            db.session.commit()
+            print(f"[IMPORT] Cleared {num_deleted} existing database records")
+        except Exception as e:
+            print(f"[IMPORT] Warning: Could not clear existing records: {e}")
+            db.session.rollback()
+        
+        # Import all rows from DATABASE sheet
+        for idx, row in df_db.iterrows():
+            try:
+                # Find the person's name (from various possible name columns)
+                person_name = None
+                person_id_val = str(row[id_column]).strip() if pd.notna(row[id_column]) else None
+                
+                # Try to find name from columns
+                for col in df_db.columns:
+                    col_lower = col.lower()
+                    if any(k in col_lower for k in ['name', 'ad', 'isim']) and 'id' not in col_lower:
+                        val = str(row[col]).strip() if pd.notna(row[col]) else ''
+                        if val and val.lower() != 'nan':
+                            try:
+                                float(val)
+                                continue  # Skip numeric values
+                            except ValueError:
+                                person_name = clean_name(val)
+                                break
+                
+                # If no name found, use the employee ID
+                if not person_name and person_id_val:
+                    person_name = f"User_{person_id_val}"
+                
+                if not person_name:
+                    continue  # Skip records without identifiable person
+                
+                # Convert row to dictionary, handling various data types
+                row_data = {}
+                for col in df_db.columns:
+                    val = row[col]
+                    if pd.isna(val):
+                        row_data[col] = None
+                    elif isinstance(val, (int, float)):
+                        # Keep numbers as numbers
+                        row_data[col] = float(val) if val != int(val) else int(val)
+                    elif hasattr(val, 'isoformat'):
+                        # Convert datetime to ISO string
+                        row_data[col] = val.isoformat()
+                    else:
+                        row_data[col] = str(val)
+                
+                # Create DatabaseRecord
+                record = DatabaseRecord(
+                    personel=person_name,
+                    data=json.dumps(row_data, ensure_ascii=False)
+                )
+                db.session.add(record)
+                stats['database_records']['imported'] += 1
+                
+            except Exception as e:
+                stats['database_records']['errors'].append(f'Row {idx}: {str(e)}')
+        
+        db.session.commit()
+        print(f"[IMPORT] Imported {stats['database_records']['imported']} database records")
+
+        # ==========================================
         # 2. PROCESS INFO (Info SHEET)
         # ==========================================
         try:
@@ -322,10 +448,11 @@ def import_all_data(current_user):
 
                     # Upsert EmployeeInfo
                     info = EmployeeInfo.query.filter_by(employee_id=person_id).first()
+                    is_new_info = False
                     if not info:
                         info = EmployeeInfo(employee_id=person_id)
                         db.session.add(info)
-                        stats['info']['imported'] += 1
+                        is_new_info = True
                     
                     info.user_id = user_id
                     info.company = str(row.get('Company', '')) if pd.notna(row.get('Company')) else None
@@ -336,6 +463,11 @@ def import_all_data(current_user):
                     # Use index navigation for Reporting (Column S -> index 18 approx, but use name if possible)
                     info.reporting_manager = str(row.get('Reporting', '')) if pd.notna(row.get('Reporting')) else None
                     info.projects = str(row.get('Projects', '')) if pd.notna(row.get('Projects')) else None
+                    
+                    if is_new_info:
+                        stats['info']['imported'] += 1
+                    else:
+                        stats['info']['updated'] += 1
 
         except Exception as e:
             print(f"Info sheet error: {e}")
@@ -410,17 +542,23 @@ def import_all_data(current_user):
                                         period=period
                                     ).first()
                                     
+                                    is_new_rate = False
                                     if not rate_rec:
                                         rate_rec = HourlyRate(
                                             employee_id=person_id,
                                             period=period
                                         )
                                         db.session.add(rate_rec)
-                                        stats['rates']['imported'] += 1
+                                        is_new_rate = True
                                     
                                     rate_rec.user_id = user_id
                                     rate_rec.hourly_rate = float(val)
                                     rate_rec.currency = currency
+                                    
+                                    if is_new_rate:
+                                        stats['rates']['imported'] += 1
+                                    else:
+                                        stats['rates']['updated'] += 1
 
         except Exception as e:
             print(f"Rates sheet error: {e}")

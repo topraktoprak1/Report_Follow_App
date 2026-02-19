@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from models import db
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -29,12 +30,22 @@ class User(db.Model):
         return check_password_hash(self.password_hash, password)
     
     def to_dict(self):
+        first = self.first_name
+        last = self.last_name
+        # If first_name is a 'User_XXXXX' placeholder, extract the real name from last_name
+        if re.match(r'^User_\S+$', first or ''):
+            parts = last.split(maxsplit=1) if last and last != '-' else []
+            if parts:
+                first = parts[0]
+                last = parts[1] if len(parts) > 1 else '-'
+            else:
+                first = ''
         return {
             'id': self.id,
             'email': self.email,
             'employeeId': self.employee_id,
-            'firstName': self.first_name,
-            'lastName': self.last_name,
+            'firstName': first,
+            'lastName': last,
             'role': self.role,
             'isActive': self.is_active,
             'createdAt': self.created_at.isoformat() if self.created_at else None,
