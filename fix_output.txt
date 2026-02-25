@@ -1,0 +1,15 @@
+Total users: 649
+
+Fixed 0 users
+
+Verification (first 10):
+  [None] Admin User
+  [900012] 7.0 Sedat Ertuğrul Özdilek
+  [905170] 7.0 Kadir Açıkgöz
+  [900131] 131.94930000000002 Kemal Volkan Kaya
+  [900126] 7.0 Hasan Kolukısa
+  [900128] 0.0 Gülçe Hazal Ak
+  [900154] 131.94930000000002 Elif Ayan Aktimur
+  [900906] 131.94930000000002 Altan Kara
+  [900903] 131.94930000000002 Nilgün Kaymaz
+  [904433] 131.94930000000002 Nur Beyza Gündüz

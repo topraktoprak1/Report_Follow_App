@@ -1,0 +1,25 @@
+﻿Total users: 649
+  FIX [900012]: "7.0"|"Sedat Ertu─Яrul ├Цzdilek" -> "Sedat"|"Ertu─Яrul ├Цzdilek"
+  FIX [905170]: "7.0"|"Kadir A├з─▒kg├╢z" -> "Kadir"|"A├з─▒kg├╢z"
+  FIX [900131]: "131.94930000000002"|"Kemal Volkan Kaya" -> "Kemal"|"Volkan Kaya"
+  FIX [900126]: "7.0"|"Hasan Koluk─▒sa" -> "Hasan"|"Koluk─▒sa"
+  FIX [900128]: "0.0"|"G├╝l├зe Hazal Ak" -> "G├╝l├зe"|"Hazal Ak"
+  FIX [900154]: "131.94930000000002"|"Elif Ayan Aktimur" -> "Elif"|"Ayan Aktimur"
+  FIX [900906]: "131.94930000000002"|"Altan Kara" -> "Altan"|"Kara"
+  FIX [900903]: "131.94930000000002"|"Nilg├╝n Kaymaz" -> "Nilg├╝n"|"Kaymaz"
+  FIX [904433]: "131.94930000000002"|"Nur Beyza G├╝nd├╝z" -> "Nur"|"Beyza G├╝nd├╝z"
+  FIX [900017]: "131.94930000000002"|"Deniz H├╝rkarde┼Я" -> "Deniz"|"H├╝rkarde┼Я"
+
+Fixed 648 users
+
+Verification (first 10 with employee_id):
+  [900012] Sedat Ertu─Яrul ├Цzdilek
+  [905170] Kadir A├з─▒kg├╢z
+  [900131] Kemal Volkan Kaya
+  [900126] Hasan Koluk─▒sa
+  [900128] G├╝l├зe Hazal Ak
+  [900154] Elif Ayan Aktimur
+  [900906] Altan Kara
+  [900903] Nilg├╝n Kaymaz
+  [904433] Nur Beyza G├╝nd├╝z
+  [900017] Deniz H├╝rkarde┼Я

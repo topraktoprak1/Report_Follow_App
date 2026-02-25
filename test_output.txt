@@ -1,0 +1,29 @@
+﻿=== USERS (first 10) ===
+Total: 649
+  [905012] Vehbi Can OK
+  [905478] JH Nam OK
+  [900012] Sedat Ertu─Яrul ├Цzdilek OK
+  [905170] Kadir A├з─▒kg├╢z OK
+  [900131] Kemal Volkan Kaya OK
+  [900126] Hasan Koluk─▒sa OK
+  [900128] G├╝l├зe Hazal Ak OK
+  [900154] Elif Ayan Aktimur OK
+  [900906] Altan Kara OK
+  [900903] Nilg├╝n Kaymaz OK
+
+=== DASHBOARD STATS ===
+{
+  "activeProjects": 0,
+  "avgPerformance": 0,
+  "completedTasks": 0,
+  "totalMH": 0,
+  "totalPersonnel": 649,
+  "totalRecords": 0
+}
+
+=== PROJECT STATS ===
+Active projects: 0
+Total tasks: 0
+Total MH: 0
+
+DONE
