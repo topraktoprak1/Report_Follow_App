@@ -360,9 +360,19 @@ def debug_routes():
 
 # Security configuration
 import secrets
-app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+# Use a FIXED secret key so sessions survive restarts.
+# Falls back to a constant dev key if env var not set.
+app.secret_key = os.environ.get('SECRET_KEY', 'anti-karma-dev-secret-key-fixed-2026')
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+
+# JWT configuration
+from datetime import timedelta
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'jwt-anti-karma-secret-key')
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
+app.config['JWT_TOKEN_LOCATION'] = ['headers']
+app.config['JWT_HEADER_NAME'] = 'Authorization'
+app.config['JWT_HEADER_TYPE'] = 'Bearer'
 
 # Session security
 app.config['SESSION_COOKIE_SECURE'] = False  # Set True in production with HTTPS
@@ -390,6 +400,10 @@ from models.saved_filter import SavedFilter
 
 # Initialize database happens after app creation below
 db.init_app(app)
+
+# Initialize JWT
+from flask_jwt_extended import JWTManager, create_access_token as jwt_create_token
+jwt_manager = JWTManager(app)
 
 # Cache for data to avoid reloading from database every time
 _data_cache = {
@@ -460,9 +474,11 @@ FAVORITES_FILE_PATH = os.path.join(os.path.dirname(__file__), 'favorite_reports.
 from routes.excel_upload import excel_bp
 from routes.excel_data import excel_data_bp
 from routes.dashboard import dashboard_bp
+from routes.analytics import analytics_bp
 app.register_blueprint(excel_bp)
 app.register_blueprint(excel_data_bp)
 app.register_blueprint(dashboard_bp)
+app.register_blueprint(analytics_bp)
 
 # ============================================================================
 # EXCEL FORMULA CALCULATION FUNCTIONS
@@ -659,54 +675,58 @@ def auth_login():
         if not user.is_active:
              return jsonify({'error': 'Hesabınız devre dışı bırakılmıştır'}), 401
 
-        # Mock allowed pages for now - allow access to everything
-        allowed_pages = [
-            'proje-raporlama', 'proje-rapor-dagilimi', 'proje-ongoru-raporu',
-            'kullanici-rapor-girisi', 'canli-sistem-kayitlari', 'personel-analiz-raporlari',
-            'kullanici-profili', 'yetkilendirme-matrix', 'izin-talep-yonetimi',
-            'kullanici-izin-detaylari', 'proje-detay-sayfasi', 'sistem-ayarlari', 'kullanici-yonetimi'
-        ]
-        
+        from utils.permissions import get_allowed_pages
+        allowed_pages = get_allowed_pages(user.role)
+
         session['user_id'] = user.id
-        session['user'] = user.email # Use email as identifier in session
+        session['user'] = user.email
         session['role'] = user.role
         session['name'] = f"{user.first_name} {user.last_name}"
-        
+
+        # Issue a real JWT so protected analytics/blueprint routes work
+        access_token = jwt_create_token(identity=str(user.id))
+
         return jsonify({
             'user': {
                 'id': user.id,
+                'firstName': user.first_name,
+                'lastName': user.last_name,
                 'name': f"{user.first_name} {user.last_name}",
                 'email': user.email,
                 'role': user.role
             },
-            'token': 'mock-token',
+            'token': access_token,
             'allowedPages': allowed_pages
         })
     return jsonify({'error': 'Geçersiz email veya şifre'}), 401
 
 @app.route('/api/auth/me', methods=['GET'])
 def auth_me():
-    """Get current user adapter"""
-    if 'user_id' in session:
-        user = User.query.get(session['user_id'])
-        if user:
-            # Mock allowed pages for now
-            allowed_pages = [
-                'proje-raporlama', 'proje-rapor-dagilimi', 'proje-ongoru-raporu',
-                'kullanici-rapor-girisi', 'canli-sistem-kayitlari', 'personel-analiz-raporlari',
-                'kullanici-profili', 'yetkilendirme-matrix', 'izin-talep-yonetimi',
-                'kullanici-izin-detaylari', 'proje-detay-sayfasi', 'sistem-ayarlari', 'kullanici-yonetimi'
-            ]
-            
-            return jsonify({
-                'user': {
-                    'id': user.id,
-                    'name': f"{user.first_name} {user.last_name}",
-                    'email': user.email,
-                    'role': user.role
-                },
-                'allowedPages': allowed_pages
-            })
+    """Get current user - supports both JWT header and session."""
+    from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
+    # Try JWT first (used by frontend api client)
+    try:
+        verify_jwt_in_request()
+        user_id = get_jwt_identity()
+        user = db.session.get(User, int(user_id))
+    except Exception:
+        # Fall back to session
+        user_id = session.get('user_id')
+        user = db.session.get(User, user_id) if user_id else None
+
+    if user and user.is_active:
+        from utils.permissions import get_allowed_pages
+        return jsonify({
+            'user': {
+                'id': user.id,
+                'firstName': user.first_name,
+                'lastName': user.last_name,
+                'name': f"{user.first_name} {user.last_name}",
+                'email': user.email,
+                'role': user.role
+            },
+            'allowedPages': get_allowed_pages(user.role)
+        })
     return jsonify({'error': 'Not logged in'}), 401
 
 @app.route('/api/users', methods=['GET'])

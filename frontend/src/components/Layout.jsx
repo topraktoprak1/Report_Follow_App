@@ -30,7 +30,7 @@ export default function Layout() {
     // Group pages by section
     const sections = [
         { title: 'Raporlar', keys: ['proje-raporlama', 'proje-rapor-dagilimi', 'proje-ongoru-raporu', 'kullanici-rapor-girisi'] },
-        { title: 'Analiz', keys: ['canli-sistem-kayitlari', 'personel-analiz-raporlari'] },
+        { title: 'Analiz', keys: ['canli-sistem-kayitlari', 'personel-analiz-raporlari', 'gelismis-analiz'] },
         { title: 'Yönetim', keys: ['kullanici-profili', 'yetkilendirme-matrix', 'izin-talep-yonetimi', 'kullanici-izin-detaylari', 'proje-detay-sayfasi'] },
         { title: 'Sistem', keys: ['sistem-ayarlari', 'kullanici-yonetimi'] },
     ];

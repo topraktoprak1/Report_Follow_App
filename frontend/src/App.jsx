@@ -16,6 +16,7 @@ import KullaniciIzinDetaylari from './pages/KullaniciIzinDetaylari';
 import ProjeDetaySayfasi from './pages/ProjeDetaySayfasi';
 import SistemAyarlari from './pages/SistemAyarlari';
 import KullaniciYonetimi from './pages/KullaniciYonetimi';
+import GelismisAnaliz from './pages/GelismisAnaliz';
 
 const pages = [
     { path: 'proje-raporlama', key: 'proje-raporlama', element: <ProjeRaporlama /> },
@@ -24,6 +25,7 @@ const pages = [
     { path: 'kullanici-rapor-girisi', key: 'kullanici-rapor-girisi', element: <KullaniciRaporGirisi /> },
     { path: 'canli-sistem-kayitlari', key: 'canli-sistem-kayitlari', element: <CanliSistemKayitlari /> },
     { path: 'personel-analiz-raporlari', key: 'personel-analiz-raporlari', element: <PersonelAnalizRaporlari /> },
+    { path: 'gelismis-analiz', key: 'gelismis-analiz', element: <GelismisAnaliz /> },
     { path: 'kullanici-profili', key: 'kullanici-profili', element: <KullaniciProfili /> },
     { path: 'yetkilendirme-matrix', key: 'yetkilendirme-matrix', element: <YetkilendirmeMatrix /> },
     { path: 'izin-talep-yonetimi', key: 'izin-talep-yonetimi', element: <IzinTalepYonetimi /> },

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import client from '../api/client';
+import { ROLE_PERMISSIONS } from '../config/permissions';
 
 const AuthContext = createContext(null);
 
@@ -9,8 +10,14 @@ export function AuthProvider({ children }) {
         return stored ? JSON.parse(stored) : null;
     });
     const [allowedPages, setAllowedPages] = useState(() => {
-        const stored = localStorage.getItem('allowedPages');
-        return stored ? JSON.parse(stored) : [];
+        // Always derive from current frontend ROLE_PERMISSIONS so new pages are
+        // immediately visible without requiring a re-login.
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+            const parsedUser = JSON.parse(storedUser);
+            return ROLE_PERMISSIONS[parsedUser.role] || [];
+        }
+        return [];
     });
     const [loading, setLoading] = useState(true);
 
@@ -19,10 +26,14 @@ export function AuthProvider({ children }) {
         if (token) {
             client.get('/auth/me')
                 .then((res) => {
-                    setUser(res.data.user);
-                    setAllowedPages(res.data.allowedPages);
-                    localStorage.setItem('user', JSON.stringify(res.data.user));
-                    localStorage.setItem('allowedPages', JSON.stringify(res.data.allowedPages));
+                    const userData = res.data.user;
+                    // Always derive from frontend ROLE_PERMISSIONS to ensure
+                    // newly added pages are visible without requiring a re-login.
+                    const pages = ROLE_PERMISSIONS[userData.role] || res.data.allowedPages || [];
+                    setUser(userData);
+                    setAllowedPages(pages);
+                    localStorage.setItem('user', JSON.stringify(userData));
+                    localStorage.setItem('allowedPages', JSON.stringify(pages));
                 })
                 .catch(() => {
                     logout();
@@ -35,7 +46,10 @@ export function AuthProvider({ children }) {
 
     const login = async (email, password) => {
         const res = await client.post('/auth/login', { email, password });
-        const { token, user: userData, allowedPages: pages } = res.data;
+        const { token, user: userData, allowedPages: backendPages } = res.data;
+        // Always derive from frontend ROLE_PERMISSIONS so newly added pages
+        // are immediately accessible after login.
+        const pages = ROLE_PERMISSIONS[userData.role] || backendPages || [];
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(userData));
         localStorage.setItem('allowedPages', JSON.stringify(pages));

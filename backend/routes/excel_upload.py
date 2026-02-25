@@ -7,6 +7,14 @@ from functools import wraps
 from models import db
 from models.user import User
 
+# Calculation engine from app2
+try:
+    from utils.calculations import calculate_auto_fields, invalidate_cache as _invalidate_calc_cache
+    _CALC_ENABLED = True
+except Exception as _calc_import_err:
+    print(f'[UPLOAD] Calculation engine not available: {_calc_import_err}')
+    _CALC_ENABLED = False
+
 
 def clean_name(name_str):
     """Remove leading numeric prefixes from names imported from Excel.
@@ -413,6 +421,15 @@ def import_all_data(current_user):
                     else:
                         row_data[col] = str(val)
                 
+                # Run auto-calculations (app2 engine)
+                if _CALC_ENABLED:
+                    try:
+                        upload_dir = os.path.join(os.path.dirname(__file__), '..', 'uploads')
+                        row_data, _ = calculate_auto_fields(row_data, file_path=filepath,
+                                                            upload_dir=upload_dir)
+                    except Exception as _ce:
+                        pass  # Non-fatal: store raw data if calc fails
+
                 # Create DatabaseRecord
                 record = DatabaseRecord(
                     personel=person_name,
@@ -426,6 +443,13 @@ def import_all_data(current_user):
         
         db.session.commit()
         print(f"[IMPORT] Imported {stats['database_records']['imported']} database records")
+
+        # Invalidate the calculation cache so the next recalculate uses the fresh file
+        if _CALC_ENABLED:
+            try:
+                _invalidate_calc_cache()
+            except Exception:
+                pass
 
         # ==========================================
         # 2. PROCESS INFO (Info SHEET)
