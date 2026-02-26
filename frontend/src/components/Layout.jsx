@@ -5,14 +5,14 @@ import { PAGE_CONFIG, ROLE_LABELS } from '../config/permissions';
 import {
     BarChart3, PieChart, TrendingUp, FileEdit, Radio, Users,
     UserCircle, Shield, CalendarCheck, CalendarDays, FolderOpen,
-    Settings, UserCog, LogOut, ChevronLeft, ChevronRight, Activity
+    Settings, UserCog, LogOut, ChevronLeft, ChevronRight, Activity, FileSpreadsheet
 } from 'lucide-react';
 import './Layout.css';
 
 const ICON_MAP = {
     BarChart3, PieChart, TrendingUp, FileEdit, Radio, Users,
     UserCircle, Shield, CalendarCheck, CalendarDays, FolderOpen,
-    Settings, UserCog,
+    Settings, UserCog, FileSpreadsheet,
 };
 
 export default function Layout() {
@@ -29,7 +29,7 @@ export default function Layout() {
 
     // Group pages by section
     const sections = [
-        { title: 'Raporlar', keys: ['proje-raporlama', 'proje-rapor-dagilimi', 'proje-ongoru-raporu', 'kullanici-rapor-girisi'] },
+        { title: 'Raporlar', keys: ['proje-raporlama', 'proje-rapor-dagilimi', 'proje-ongoru-raporu', 'kullanici-rapor-girisi', 'hakedis-raporu'] },
         { title: 'Analiz', keys: ['canli-sistem-kayitlari', 'personel-analiz-raporlari', 'gelismis-analiz'] },
         { title: 'Yönetim', keys: ['kullanici-profili', 'yetkilendirme-matrix', 'izin-talep-yonetimi', 'kullanici-izin-detaylari', 'proje-detay-sayfasi'] },
         { title: 'Sistem', keys: ['sistem-ayarlari', 'kullanici-yonetimi'] },

@@ -1,6 +1,5 @@
 import os
 import re
-import tempfile
 # import pandas as pd (moved to functions)
 from flask import Blueprint, request, jsonify, session
 from functools import wraps
@@ -31,7 +30,7 @@ def clean_name(name_str):
 
 excel_bp = Blueprint('excel', __name__, url_prefix='/api/excel')
 
-UPLOAD_FOLDER = os.path.join(tempfile.gettempdir(), 'antikarma_uploads')
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), '..', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 REQUIRED_SHEETS = ['DATABASE', 'Info', 'Hourly Rates']

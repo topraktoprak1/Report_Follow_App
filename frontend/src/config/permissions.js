@@ -3,13 +3,13 @@ export const ROLE_PERMISSIONS = {
     admin: [
         'proje-raporlama', 'proje-rapor-dagilimi', 'proje-ongoru-raporu',
         'kullanici-rapor-girisi', 'canli-sistem-kayitlari', 'personel-analiz-raporlari',
-        'gelismis-analiz',
+        'gelismis-analiz', 'hakedis-raporu',
         'kullanici-profili', 'yetkilendirme-matrix', 'izin-talep-yonetimi',
         'kullanici-izin-detaylari', 'proje-detay-sayfasi', 'sistem-ayarlari', 'kullanici-yonetimi',
     ],
     project_manager: [
         'proje-raporlama', 'proje-rapor-dagilimi', 'proje-ongoru-raporu',
-        'kullanici-rapor-girisi', 'canli-sistem-kayitlari', 'gelismis-analiz',
+        'kullanici-rapor-girisi', 'canli-sistem-kayitlari', 'gelismis-analiz', 'hakedis-raporu',
         'kullanici-profili', 'proje-detay-sayfasi',
     ],
     team_leader: [
@@ -43,6 +43,7 @@ export const PAGE_CONFIG = [
     { key: 'canli-sistem-kayitlari', label: 'Canlı Sistem Kayıtları', path: '/canli-sistem-kayitlari', icon: 'Radio' },
     { key: 'personel-analiz-raporlari', label: 'Personel Analiz Raporları', path: '/personel-analiz-raporlari', icon: 'Users' },
     { key: 'gelismis-analiz', label: 'Gelişmiş Analiz', path: '/gelismis-analiz', icon: 'TrendingUp' },
+    { key: 'hakedis-raporu', label: 'Hakediş Raporu', path: '/hakedis-raporu', icon: 'FileSpreadsheet' },
     { key: 'kullanici-profili', label: 'Kullanıcı Profili', path: '/kullanici-profili', icon: 'UserCircle' },
     { key: 'yetkilendirme-matrix', label: 'Yetkilendirme Matrix', path: '/yetkilendirme-matrix', icon: 'Shield' },
     { key: 'izin-talep-yonetimi', label: 'İzin Talep Yönetimi', path: '/izin-talep-yonetimi', icon: 'CalendarCheck' },

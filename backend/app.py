@@ -364,7 +364,7 @@ import secrets
 # Falls back to a constant dev key if env var not set.
 app.secret_key = os.environ.get('SECRET_KEY', 'anti-karma-dev-secret-key-fixed-2026')
 app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size (for Access .accdb files)
 
 # JWT configuration
 from datetime import timedelta
@@ -475,10 +475,12 @@ from routes.excel_upload import excel_bp
 from routes.excel_data import excel_data_bp
 from routes.dashboard import dashboard_bp
 from routes.analytics import analytics_bp
+from routes.hakedis import hakedis_bp
 app.register_blueprint(excel_bp)
 app.register_blueprint(excel_data_bp)
 app.register_blueprint(dashboard_bp)
 app.register_blueprint(analytics_bp)
+app.register_blueprint(hakedis_bp)
 
 # ============================================================================
 # EXCEL FORMULA CALCULATION FUNCTIONS
