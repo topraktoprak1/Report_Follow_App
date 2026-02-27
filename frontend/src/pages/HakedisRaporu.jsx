@@ -565,19 +565,19 @@ export default function HakedisRaporu() {
                             display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 20,
                         }}>
                             <SummaryTile
-                                label="Cari Dönem MH"
+                                label="Bu Dönem Toplam Çalışma Saati"
                                 value={fmt(result.totals.currentMH)}
                                 unit="MH"
                                 color="#3b82f6"
                             />
                             <SummaryTile
-                                label="Cari Dönem Hakediş"
+                                label="Bu Dönem Hakediş Tutarı"
                                 value={fmt(result.totals.currentHakedis)}
                                 unit={result.meta?.currency || 'USD'}
                                 color="#10b981"
                             />
                             <SummaryTile
-                                label="Geçmiş Dönem Hakediş"
+                                label="Geçmiş Dönem Kümülatif Hakediş"
                                 value={fmt(result.totals.previousHakedis)}
                                 unit={result.meta?.currency || 'USD'}
                                 color="#f59e0b"
@@ -604,10 +604,10 @@ export default function HakedisRaporu() {
                                 <thead>
                                     <tr style={{ background: '#1e3a5f', color: 'white' }}>
                                         {['Proje', 'PP No', 'Cari MH',
-                                          `Cari Hakediş (${result.meta?.currency || 'USD'})`,
-                                          'Geçmiş MH',
-                                          `Geçmiş Hakediş (${result.meta?.currency || 'USD'})`,
-                                          `Kümülatif (${result.meta?.currency || 'USD'})`,
+                                          `Bu Dönem Hakediş (${result.meta?.currency || 'USD'})`,
+                                          'Geçmiş Dönem Toplam Çalışma Saati',
+                                          `Geçmiş Dönem Kümülatif Hakediş Tutarı (${result.meta?.currency || 'USD'})`,
+                                          `Kümülatif Hakediş Tutarı (${result.meta?.currency || 'USD'})`,
                                           'Personel'].map(h => (
                                             <th key={h} style={thStyle}>{h}</th>
                                         ))}

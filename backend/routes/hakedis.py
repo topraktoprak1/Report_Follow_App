@@ -1450,7 +1450,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
     # ── Title ─────────────────────────────────────────────────────────────────
     _merge(r, 1, NC)
     c = _cell(r, 1,
-              f'{company} Hakedis Raporu / {company}',
+              f'{company} Hakedis Raporu / Progress Payment',
               bold=True, size=12, fg=WHITE, bg=NAVY, halign='center')
     c.border = THIN
     _row_h(r, 26)
@@ -1523,22 +1523,33 @@ def _build_excel(rows, totals, meta, person_detail=None):
     _cell(r, 5, totals['currentHakedis'],   bold=True, halign='center', fmt=HAK_FMT).border = THIN
     r += 1
 
+    # Calculate VAT (20%)
+    vat_cumulative = totals['cumulativeHakedis'] * 0.20
+    vat_previous = totals['previousHakedis'] * 0.20
+    vat_current = totals['currentHakedis'] * 0.20
+
     # KDV / VAT 20%
     _row_h(r, 16)
     _cell(r, 1, 'KDV / VAT 20%', bold=True).border = THIN
     for col in range(2, NC + 1):
         ws.cell(row=r, column=col).border = THIN
-    for col in (3, 4, 5):
-        _cell(r, col, 0, halign='center', fmt=HAK_FMT).border = THIN
+    _cell(r, 3, vat_cumulative, halign='center', fmt=HAK_FMT).border = THIN
+    _cell(r, 4, vat_previous, halign='center', fmt=HAK_FMT).border = THIN
+    _cell(r, 5, vat_current, halign='center', fmt=HAK_FMT).border = THIN
     r += 1
+
+    # Calculate totals with VAT
+    total_with_vat_cumulative = totals['cumulativeHakedis'] + vat_cumulative
+    total_with_vat_previous = totals['previousHakedis'] + vat_previous
+    total_with_vat_current = totals['currentHakedis'] + vat_current
 
     # Toplam / Total
     _row_h(r, 18)
     _cell(r, 1, 'Toplam / Total', bold=True, bg=TOTAL_BG).border = THIN
     ws.cell(row=r, column=2).fill = _fill(TOTAL_BG); ws.cell(row=r, column=2).border = THIN
-    _cell(r, 3, totals['cumulativeHakedis'], bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THIN
-    _cell(r, 4, totals['previousHakedis'],  bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THIN
-    _cell(r, 5, totals['currentHakedis'],   bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THIN
+    _cell(r, 3, total_with_vat_cumulative, bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THIN
+    _cell(r, 4, total_with_vat_previous, bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THIN
+    _cell(r, 5, total_with_vat_current, bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THIN
     r += 1
 
     r += 1  # spacer
@@ -1592,7 +1603,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
     _cell(r, 1, 'Net Hakediş Tutarı / Net Progress Payment Amount').border = THIN
     for col in (2, 3, 4):
         ws.cell(row=r, column=col).border = THIN
-    _cell(r, 5, totals['currentHakedis'], bold=True, halign='center', fmt=HAK_FMT).border = THIN
+    _cell(r, 5, total_with_vat_current, bold=True, halign='center', fmt=HAK_FMT).border = THIN
     _row_h(r, 16)
     r += 1
 
@@ -1602,7 +1613,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
     for col in (2, 3, 4):
         ws.cell(row=r, column=col).fill = _fill(TOTAL_BG)
         ws.cell(row=r, column=col).border = THIN
-    _cell(r, 5, totals['cumulativeHakedis'], bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THIN
+    _cell(r, 5, total_with_vat_cumulative, bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THIN
     _row_h(r, 16)
     r += 1
 
