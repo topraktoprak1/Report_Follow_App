@@ -425,6 +425,42 @@ def generate_hakedis(current_user=None):
     # Determine if Hourly Rates Excel is available
     use_hourly_rates = bool(_read_excel_rows('hourly_rates'))
 
+    # --- Load company name mapping (Şirket İsimleri) ---
+    company_name_map = {}
+    sirket_rows = _read_excel_rows('sirket_isimleri')
+    if sirket_rows and len(sirket_rows) > 0:
+        # Try various column name combinations for short/long names
+        for row in sirket_rows:
+            short_name = (_safe_str(row.get('Şirket')) or
+                         _safe_str(row.get('Sirket')) or
+                         _safe_str(row.get('Kısa Ad')) or 
+                         _safe_str(row.get('Short Name')) or
+                         _safe_str(row.get('Kisa Ad')) or
+                         _safe_str(row.get('ShortName')) or
+                         _safe_str(row.get('short')) or
+                         _safe_str(row.get('Short')) or
+                         _safe_str(row.get('Kısa İsim')) or
+                         _safe_str(row.get('Kisa Isim')))
+            long_name = (_safe_str(row.get('Şirket Tam İsim')) or
+                        _safe_str(row.get('Sirket Tam Isim')) or
+                        _safe_str(row.get('Tam İsim')) or
+                        _safe_str(row.get('Tam Isim')) or
+                        _safe_str(row.get('Uzun Ad')) or
+                        _safe_str(row.get('Long Name')) or
+                        _safe_str(row.get('LongName')) or
+                        _safe_str(row.get('long')) or
+                        _safe_str(row.get('Long')) or
+                        _safe_str(row.get('Full Name')) or
+                        _safe_str(row.get('FullName')) or
+                        _safe_str(row.get('Uzun İsim')) or
+                        _safe_str(row.get('Uzun Isim')))
+            if short_name and long_name:
+                company_name_map[short_name] = long_name
+    
+    # Map company and employer to long names if available
+    company_long = company_name_map.get(company, company)
+    employer_long = company_name_map.get(employer, employer)
+
     # --- Load & filter records ---
     # Records are matched by Company + date range (+ optional N/S region + scope).
     # Sözleşme No from the Hakedis Excel is a report label only — not stored in DB records.
@@ -592,8 +628,8 @@ def generate_hakedis(current_user=None):
     }
 
     meta = {
-        'company':         company,
-        'employer':        employer,
+        'company':         company_long,
+        'employer':        employer_long,
         'contractNo':      contract_no,
         'startDate':       start_str,
         'endDate':         end_str,
@@ -1361,7 +1397,13 @@ def _build_excel(rows, totals, meta, person_detail=None):
     SECTION_BG = 'D6DCE4'   # light grey section sub-headers
 
     cur_label = meta.get('currency', 'TL')
-    HAK_FMT   = '#,##0.00'  # numeric; currency label shown in column header
+    # Currency format with symbol
+    if cur_label == 'USD' or cur_label == '$':
+        HAK_FMT = '#,##0.00 "$"'
+    elif cur_label == 'EUR' or cur_label == '€':
+        HAK_FMT = '#,##0.00 "€"'
+    else:  # TL or default
+        HAK_FMT = '#,##0.00 "₺"'
 
     NC = 5   # number of columns: A=Work Def, B=PP No, C=Cumulative, D=Previous, E=This Period
 
@@ -1410,7 +1452,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
     c = _cell(r, 1,
               f'{company} Hakedis Raporu / {company}',
               bold=True, size=12, fg=WHITE, bg=NAVY, halign='center')
-    c.border = THICK
+    c.border = THIN
     _row_h(r, 26)
     r += 1
 
@@ -1436,7 +1478,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
     _merge(r, 1, NC)
     c = _cell(r, 1, 'A - Yapılan İşin Bedeli / Actual Cost for Work Performed',
               bold=True, size=11, fg=WHITE, bg=NAVY, halign='left')
-    c.border = THICK
+    c.border = THIN
     _row_h(r, 20)
     r += 1
 
@@ -1492,11 +1534,11 @@ def _build_excel(rows, totals, meta, person_detail=None):
 
     # Toplam / Total
     _row_h(r, 18)
-    _cell(r, 1, 'Toplam / Total', bold=True, bg=TOTAL_BG).border = THICK
-    ws.cell(row=r, column=2).fill = _fill(TOTAL_BG); ws.cell(row=r, column=2).border = THICK
-    _cell(r, 3, totals['cumulativeHakedis'], bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THICK
-    _cell(r, 4, totals['previousHakedis'],  bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THICK
-    _cell(r, 5, totals['currentHakedis'],   bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THICK
+    _cell(r, 1, 'Toplam / Total', bold=True, bg=TOTAL_BG).border = THIN
+    ws.cell(row=r, column=2).fill = _fill(TOTAL_BG); ws.cell(row=r, column=2).border = THIN
+    _cell(r, 3, totals['cumulativeHakedis'], bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THIN
+    _cell(r, 4, totals['previousHakedis'],  bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THIN
+    _cell(r, 5, totals['currentHakedis'],   bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THIN
     r += 1
 
     r += 1  # spacer
@@ -1505,7 +1547,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
     _merge(r, 1, NC)
     c = _cell(r, 1, 'B - Kesintiler / Deductions',
               bold=True, size=11, fg=WHITE, bg=NAVY, halign='left')
-    c.border = THICK
+    c.border = THIN
     _row_h(r, 20)
     r += 1
 
@@ -1528,10 +1570,10 @@ def _build_excel(rows, totals, meta, person_detail=None):
 
     # Kesintiler Toplamı
     _merge(r, 1, 2)
-    _cell(r, 1, 'Kesintiler Toplamı / Deductions Total', bold=True, bg=TOTAL_BG).border = THICK
-    ws.cell(row=r, column=2).fill = _fill(TOTAL_BG); ws.cell(row=r, column=2).border = THICK
+    _cell(r, 1, 'Kesintiler Toplamı / Deductions Total', bold=True, bg=TOTAL_BG).border = THIN
+    ws.cell(row=r, column=2).fill = _fill(TOTAL_BG); ws.cell(row=r, column=2).border = THIN
     for col in (3, 4, 5):
-        _cell(r, col, 0, bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THICK
+        _cell(r, col, 0, bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THIN
     _row_h(r, 16)
     r += 1
 
@@ -1541,7 +1583,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
     _merge(r, 1, NC)
     c = _cell(r, 1, 'C - Net Hakediş Tutarı / Net Progress Payment (C=A-B)',
               bold=True, size=11, fg=WHITE, bg=NAVY, halign='left')
-    c.border = THICK
+    c.border = THIN
     _row_h(r, 20)
     r += 1
 
@@ -1556,11 +1598,11 @@ def _build_excel(rows, totals, meta, person_detail=None):
 
     # Toplam / Total Amount
     _merge(r, 1, 4)
-    _cell(r, 1, 'Toplam / Total Amount', bold=True, bg=TOTAL_BG).border = THICK
+    _cell(r, 1, 'Toplam / Total Amount', bold=True, bg=TOTAL_BG).border = THIN
     for col in (2, 3, 4):
         ws.cell(row=r, column=col).fill = _fill(TOTAL_BG)
-        ws.cell(row=r, column=col).border = THICK
-    _cell(r, 5, totals['cumulativeHakedis'], bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THICK
+        ws.cell(row=r, column=col).border = THIN
+    _cell(r, 5, totals['cumulativeHakedis'], bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THIN
     _row_h(r, 16)
     r += 1
 
@@ -1607,11 +1649,14 @@ def _build_excel(rows, totals, meta, person_detail=None):
 
         # Header row
         det_headers = [
-            'Proje', 'Personel',
-            'Cari MH', f'Cari Hakediş ({cur_label})',
-            'Geçmiş MH', f'Geçmiş Hakediş ({cur_label})',
-            f'Kümülatif ({cur_label})',
-            'Birim Fiyat', 'Para Birimi',
+            'Personel',
+            'Bu Dönem Toplam Çalışma',
+            'Bu Dönem Hakediş Tutarı / This Period Progress Payment',
+            'Geçmiş Dönem Toplam Çalışma',
+            'Bir Önceki Kümülatif Hakediş Tutarı / Previous Period Progress Payment',
+            'Kümülatif Hakediş Tutarı / Cumulative Progress Payment',
+            'Birim Fiyat',
+            'Para Birimi',
         ]
         ws2.row_dimensions[1].height = 30
         for col, hdr in enumerate(det_headers, start=1):
@@ -1639,14 +1684,14 @@ def _build_excel(rows, totals, meta, person_detail=None):
                 currency  = pd['currency'] or ''
 
                 vals = [
-                    proj, pname,
+                    pname,
                     cur_mh, cur_tot,
                     prev_mh, prev_tot,
                     cumul,
                     rate, currency,
                 ]
                 fmts = [
-                    None, None,
+                    None,
                     MH_FMT, HAK_FMT,
                     MH_FMT, HAK_FMT,
                     HAK_FMT,
@@ -1657,7 +1702,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
                     c.fill = row_fill
                     c.border = thin_border()
                     c.alignment = Alignment(
-                        horizontal='left' if col <= 2 else 'right',
+                        horizontal='left' if col == 1 else 'right',
                         vertical='center'
                     )
                     if fmt:
@@ -1670,14 +1715,14 @@ def _build_excel(rows, totals, meta, person_detail=None):
         ws2.cell(row=det_row, column=1, value='TOPLAM').font = Font(bold=True)
         ws2.cell(row=det_row, column=1).fill = total_row_fill
         ws2.cell(row=det_row, column=1).border = bold_border()
-        for col, idx in [(3, 'cur_mh'), (4, 'cur_total'), (5, 'prev_mh'),
-                         (6, 'prev_total'), (7, None)]:
+        for col, idx in [(2, 'cur_mh'), (3, 'cur_total'), (4, 'prev_mh'),
+                         (5, 'prev_total'), (6, None)]:
             if idx:
                 val = sum(pd[idx] for ps in person_detail.values() for pd in ps.values())
             else:  # cumulative
                 val = sum(pd['cur_total'] + pd['prev_total']
                           for ps in person_detail.values() for pd in ps.values())
-            fmt = MH_FMT if col in (3, 5) else HAK_FMT
+            fmt = MH_FMT if col in (2, 4) else HAK_FMT
             c = ws2.cell(row=det_row, column=col, value=val)
             c.font = Font(bold=True)
             c.fill = total_row_fill
@@ -1686,7 +1731,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
             c.alignment = Alignment(horizontal='right', vertical='center')
 
         # Column widths sheet 2
-        det_widths = [42, 30, 12, 18, 12, 18, 18, 14, 12]
+        det_widths = [30, 18, 32, 18, 38, 32, 14, 12]
         for i, w in enumerate(det_widths, start=1):
             ws2.column_dimensions[get_column_letter(i)].width = w
 

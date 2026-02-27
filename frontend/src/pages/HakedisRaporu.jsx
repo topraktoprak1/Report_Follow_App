@@ -369,15 +369,6 @@ export default function HakedisRaporu() {
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
-                    {/* Company (Projeci / Project Designer) */}
-                    <label style={labelStyle}>
-                        <span style={labelTextStyle}><Building2 size={13} style={{ marginRight: 4 }} />Projeci Şirket *</span>
-                        <select value={company} onChange={e => setCompany(e.target.value)} style={selectStyle}>
-                            <option value="">— Seçin —</option>
-                            {companies.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                    </label>
-
                     {/* İşveren (Employer / Client) — Level 1 of cascade */}
                     <label style={labelStyle}>
                         <span style={labelTextStyle}>
@@ -391,17 +382,15 @@ export default function HakedisRaporu() {
                             {['AP-CB', 'BALTIC'].map(e => <option key={e} value={e}>{e}</option>)}
                         </select>
                     </label>
-
-                    {/* Sözleşme No (20xx-xx-xx) — Level 2 of cascade */}
+                    {/* Company (Projeci / Project Designer) */}
                     <label style={labelStyle}>
-                        <span style={labelTextStyle}>
-                            <FileText size={13} style={{ marginRight: 4 }} />Sözleşme No
-                        </span>
-                        <select value={contractNo} onChange={e => setContractNo(e.target.value)} style={selectStyle}>
-                            <option value="">— Tümü —</option>
-                            {employerContracts.map(c => <option key={c} value={c}>{c}</option>)}
+                        <span style={labelTextStyle}><Building2 size={13} style={{ marginRight: 4 }} />Projeci Şirket *</span>
+                        <select value={company} onChange={e => setCompany(e.target.value)} style={selectStyle}>
+                            <option value="">— Seçin —</option>
+                            {companies.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                     </label>
+
 
                     {/* Kapsam / Scope — Level 3 of cascade */}
                     {contractScopes.length > 0 && (
@@ -438,6 +427,16 @@ export default function HakedisRaporu() {
                             }}
                             style={inputStyle}
                         />
+                    </label>
+                    {/* Sözleşme No (20xx-xx-xx) — Level 2 of cascade */}
+                    <label style={labelStyle}>
+                        <span style={labelTextStyle}>
+                            <FileText size={13} style={{ marginRight: 4 }} />Sözleşme No
+                        </span>
+                        <select value={contractNo} onChange={e => setContractNo(e.target.value)} style={selectStyle}>
+                            <option value="">— Tümü —</option>
+                            {employerContracts.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
                     </label>
 
                     {/* Report Date */}
@@ -542,7 +541,7 @@ export default function HakedisRaporu() {
                         <InfoCard label="Sözleşme No"      value={result.meta?.contractNo} />
                         <InfoCard label="Dönem"            value={`${result.meta?.startDate} → ${result.meta?.endDate}`} />
                         <InfoCard label="Toplam Kayıt"     value={result.meta?.totalRecords} />
-                        <InfoCard label="Cari Dönem K."    value={result.meta?.currentRecords} />
+                        <InfoCard label="Bu Dönem Kayıt Sayısı"    value={result.meta?.currentRecords} />
                         {result.meta?.periodText && (
                             <InfoCard label="Dönem Metni"  value={result.meta.periodText} />
                         )}
