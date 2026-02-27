@@ -165,4 +165,25 @@ export const hakedisApi = {
             return { success: false, error: err.message };
         }
     },
+
+    /**
+     * POST /api/hakedis/bulk-generate
+     * Generates all companies' Excel files for the given period and returns a ZIP.
+     */
+    bulkDownload: async (params) => {
+        const res = await client.post(
+            `${BASE}/bulk-generate`,
+            params,
+            { responseType: 'blob', timeout: 300000 }
+        );
+        const url = URL.createObjectURL(new Blob([res.data], { type: 'application/zip' }));
+        const link = document.createElement('a');
+        link.href = url;
+        const period = params.startDate?.slice(0, 7) || 'period';
+        link.download = `Toplu_Hakedis_${period}.zip`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    },
 };

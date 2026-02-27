@@ -223,6 +223,14 @@ export default function HakedisRaporu() {
     const [dlLoading,  setDlLoading]  = useState(false);
     const [error,      setError]      = useState('');
 
+    // ── Bulk generate state ──
+    const [bulkStart,   setBulkStart]   = useState('');
+    const [bulkEnd,     setBulkEnd]     = useState('');
+    const [bulkPeriod,  setBulkPeriod]  = useState('');
+    const [bulkLoading, setBulkLoading] = useState(false);
+    const [bulkError,   setBulkError]   = useState('');
+    const [bulkSuccess, setBulkSuccess] = useState('');
+
     const loadCascade = useCallback((emp, year) => {
         hakedisApi.getCascade({ employer: emp || '', year: year || '' }).then(res => {
             if (res.success) setCascadeData(res);
@@ -328,6 +336,31 @@ export default function HakedisRaporu() {
     }, [company, employer, contractNo, scopeFilter, startDate, endDate, reportDate, periodText, usdToTlRate, autoRateActive]);
 
     const formComplete = company && startDate && endDate;
+
+    // ── Bulk Generate ──
+    const handleBulkGenerate = useCallback(async () => {
+        if (!bulkStart || !bulkEnd) {
+            setBulkError('Lütfen dönem başlangıç ve bitiş tarihlerini seçin.');
+            return;
+        }
+        setBulkError('');
+        setBulkSuccess('');
+        setBulkLoading(true);
+        try {
+            await hakedisApi.bulkDownload({
+                startDate:   bulkStart,
+                endDate:     bulkEnd,
+                reportDate:  (() => { const d = new Date(bulkEnd); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); })(),
+                periodText:  bulkPeriod,
+                usdToTlRate: autoRateActive ? 0 : (parseFloat(usdToTlRate) || 0),
+            });
+            setBulkSuccess('ZIP başarıyla indirildi! "AP-CB Hakediş" ve "BALTIC Hakediş" klasörlerini kontrol edin.');
+        } catch (e) {
+            setBulkError('Toplu indirme başarısız: ' + (e.response?.data ? 'Veri bulunamadı.' : (e.message || 'Hata')));
+        } finally {
+            setBulkLoading(false);
+        }
+    }, [bulkStart, bulkEnd, bulkPeriod, usdToTlRate, autoRateActive]);
 
     // ─────────────────────────────────────────────────────────────────────────
     return (
@@ -529,6 +562,73 @@ export default function HakedisRaporu() {
                 )}
             </div>
 
+            {/* ── Bulk Generate Section ── */}
+            <div style={{
+                background: 'white', borderRadius: 14,
+                border: '1px solid #e2e8f0', padding: '20px 24px',
+                boxShadow: '0 1px 4px rgba(0,0,0,.06)', marginBottom: 20,
+            }}>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4, color: '#334155', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Download size={16} color="#7c3aed" />
+                    <span>Toplu Hakediş Oluştur / Bulk Generate</span>
+                </div>
+                <p style={{ margin: '0 0 16px 0', fontSize: 12, color: '#64748b' }}>
+                    Seçilen dönemdeki tüm şirketlerin hakediş raporlarını otomatik oluşturur ve
+                    <strong> AP-CB Hakediş</strong> / <strong>BALTIC Hakediş</strong> klasörleri halinde ZIP olarak indirir.
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16, marginBottom: 16 }}>
+                    <label style={labelStyle}>
+                        <span style={labelTextStyle}><Calendar size={13} style={{ marginRight: 4 }} />Dönem Başlangıcı *</span>
+                        <input type="date" value={bulkStart} onChange={e => setBulkStart(e.target.value)} style={inputStyle} />
+                    </label>
+                    <label style={labelStyle}>
+                        <span style={labelTextStyle}><Calendar size={13} style={{ marginRight: 4 }} />Dönem Bitişi *</span>
+                        <input
+                            type="date" value={bulkEnd}
+                            onChange={e => {
+                                setBulkEnd(e.target.value);
+                                if (e.target.value && !bulkPeriod) {
+                                    const d = new Date(e.target.value);
+                                    setBulkPeriod(d.toLocaleString('tr-TR', { month: 'long', year: 'numeric' }));
+                                }
+                            }}
+                            style={inputStyle}
+                        />
+                    </label>
+                    <label style={labelStyle}>
+                        <span style={labelTextStyle}>Dönem Metni</span>
+                        <input
+                            type="text" value={bulkPeriod}
+                            onChange={e => setBulkPeriod(e.target.value)}
+                            placeholder="örn. Aralık 2025"
+                            style={inputStyle}
+                        />
+                    </label>
+                </div>
+
+                <button
+                    onClick={handleBulkGenerate}
+                    disabled={!bulkStart || !bulkEnd || bulkLoading}
+                    style={btnStyle('#7c3aed', !bulkStart || !bulkEnd || bulkLoading)}
+                >
+                    {bulkLoading
+                        ? <><Loader2 size={15} style={{ marginRight: 6, animation: 'spin 1s linear infinite' }} />Oluşturuluyor…</>
+                        : <><Download size={15} style={{ marginRight: 6 }} />Tümünü İndir (ZIP)</>}
+                </button>
+
+                {bulkError && (
+                    <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', color: '#dc2626', fontSize: 13 }}>
+                        <AlertCircle size={16} />{bulkError}
+                    </div>
+                )}
+                {bulkSuccess && (
+                    <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px', color: '#166534', fontSize: 13 }}>
+                        <CheckCircle2 size={16} />{bulkSuccess}
+                    </div>
+                )}
+            </div>
+
             {/* ── Results ── */}
             {result && (
                 <>
@@ -603,7 +703,7 @@ export default function HakedisRaporu() {
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                                 <thead>
                                     <tr style={{ background: '#1e3a5f', color: 'white' }}>
-                                        {['Proje', 'PP No', 'Cari MH',
+                                        {['Proje', 'Hakediş Numarası', 'Bu Dönem Toplam Çalışma Saati',
                                           `Bu Dönem Hakediş (${result.meta?.currency || 'USD'})`,
                                           'Geçmiş Dönem Toplam Çalışma Saati',
                                           `Geçmiş Dönem Kümülatif Hakediş Tutarı (${result.meta?.currency || 'USD'})`,

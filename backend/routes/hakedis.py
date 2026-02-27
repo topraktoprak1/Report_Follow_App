@@ -663,6 +663,335 @@ def generate_hakedis(current_user=None):
 
 
 # ---------------------------------------------------------------------------
+# Bulk generate — all companies in a period → ZIP with two folders
+# ---------------------------------------------------------------------------
+
+@hakedis_bp.route('/bulk-generate', methods=['POST'])
+@role_required('admin', 'project_manager', 'team_leader')
+def bulk_generate_hakedis(current_user=None):
+    """
+    Generate progress payment Excel files for ALL companies that have data in a
+    given date range, then return a single ZIP file containing two sub-folders:
+      - "AP-CB Hakediş/"  (South region / APC contracts)
+      - "BALTIC Hakediş/" (North region / BAL contracts)
+    Each file is named  <Company>_<YYYY-MM>.xlsx.
+
+    Expected JSON body:
+    {
+        "startDate":   "2025-12-01",
+        "endDate":     "2025-12-31",
+        "reportDate":  "2026-01-01",   // optional
+        "periodText":  "Aralık 2025",  // optional
+        "usdToTlRate": 38              // ignored when Döviz Kurları Excel is uploaded
+    }
+    """
+    import zipfile
+
+    body = request.get_json(force=True) or {}
+    start_str       = body.get('startDate', '')
+    end_str         = body.get('endDate', '')
+    period_text     = body.get('periodText', '')
+    usd_to_tl       = float(body.get('usdToTlRate', 0) or 0)
+    report_date_str = body.get('reportDate', '')
+
+    try:
+        start_date = datetime.strptime(start_str[:10], '%Y-%m-%d').date()
+        end_date   = datetime.strptime(end_str[:10],   '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'success': False, 'error': 'Geçersiz tarih formatı. YYYY-MM-DD kullanın.'}), 400
+
+    report_date = date.today()
+    if report_date_str:
+        try:
+            report_date = datetime.strptime(report_date_str[:10], '%Y-%m-%d').date()
+        except ValueError:
+            pass
+
+    year_start = date(start_date.year, 1, 1)
+    day_before = start_date - timedelta(days=1)
+
+    use_auto_rate    = bool(_read_excel_rows('doviz_kurlari'))
+    use_hourly_rates = bool(_read_excel_rows('hourly_rates'))
+    if use_auto_rate:
+        usd_to_tl = 0
+    output_currency = 'TL' if (usd_to_tl > 0 or use_auto_rate) else 'USD'
+
+    # Company name mapping (short → long)
+    company_name_map = {}
+    for row in (_read_excel_rows('sirket_isimleri') or []):
+        short_name = (_safe_str(row.get('Şirket')) or _safe_str(row.get('Sirket')) or
+                      _safe_str(row.get('Kısa Ad')) or _safe_str(row.get('Short Name')) or
+                      _safe_str(row.get('Kisa Ad')))
+        long_name  = (_safe_str(row.get('Şirket Tam İsim')) or _safe_str(row.get('Sirket Tam Isim')) or
+                      _safe_str(row.get('Tam İsim')) or _safe_str(row.get('Uzun Ad')) or
+                      _safe_str(row.get('Long Name')))
+        if short_name and long_name:
+            company_name_map[short_name] = long_name
+
+    # Contracts from Hakedis Excel, keyed by company name and filtered by period year
+    # Logic mirrors the cascade endpoint: 2026 also accepts 2025 contracts
+    _BULK_TR = str.maketrans('\u00e7\u011f\u0131\u00f6\u015f\u00fc\u00c7\u011e\u0130\u00d6\u015e\u00dc', 'cgiosucgiosu')
+    def _bn(s):
+        return re.sub(r'[^a-z0-9]', '', (s or '').lower().translate(_BULK_TR))
+
+    hakedis_contracts_map = {}   # { firm_name: [contract_no, ...] }
+    CONTRACT_RE2 = re.compile(r'20\d{2}[-/]\d{2}[-/]\d{2}')
+    hakedis_excel_rows = _read_excel_rows('hakedis')
+    if hakedis_excel_rows:
+        sozlesme_col = firma_col = None
+        for k in hakedis_excel_rows[0].keys():
+            kn = _bn(k)
+            if sozlesme_col is None and 'sozlesme' in kn:
+                sozlesme_col = k
+            if firma_col is None and ('firma' in kn or 'company' in kn or 'sirket' in kn):
+                firma_col = k
+        # Fallback: detect by value pattern
+        if sozlesme_col is None:
+            for k in hakedis_excel_rows[0].keys():
+                hits = sum(1 for row in hakedis_excel_rows[:10]
+                           if CONTRACT_RE2.match(str(row.get(k) or '').strip()))
+                if hits >= max(1, min(len(hakedis_excel_rows[:10]), 3)):
+                    sozlesme_col = k
+                    break
+        if sozlesme_col:
+            year_int = start_date.year
+            for row in hakedis_excel_rows:
+                con = str(row.get(sozlesme_col, '') or '').strip()
+                if not con or con in ('nan', 'None'):
+                    continue
+                # Year filter: 2026 period also accepts 2025 contracts
+                if year_int == 2026:
+                    if not (con.startswith('2026') or con.startswith('2025')):
+                        continue
+                else:
+                    if not con.startswith(str(year_int)):
+                        continue
+                firm = str(row.get(firma_col, '') or '').strip() if firma_col else ''
+                if firm in ('nan', 'None'):
+                    firm = ''
+                hakedis_contracts_map.setdefault(firm, set()).add(con)
+        hakedis_contracts_map = {k: sorted(v) for k, v in hakedis_contracts_map.items()}
+
+    all_records = _load_records()
+
+    # ── Pass 1: find (company, employer_key) combos with current-period data ──
+    combo_set = set()   # {(company, 'AP-CB') | (company, 'BALTIC')}
+    for r in all_records:
+        rec_date = _parse_record_date(r)
+        if not rec_date or not (start_date <= rec_date <= end_date):
+            continue
+        comp = _safe_str(r.get('Company', ''))
+        if not comp:
+            continue
+        ns       = _safe_str(r.get('North/ South', '') or r.get('North/South', '')).strip()
+        contract = _safe_str(r.get('İşveren- Sözleşme No', '')).upper()
+        if ns == 'South' or 'APC' in contract:
+            combo_set.add((comp, 'AP-CB'))
+        elif ns == 'North' or 'BAL' in contract:
+            combo_set.add((comp, 'BALTIC'))
+
+    if not combo_set:
+        return jsonify({'success': False, 'error': 'Seçilen dönemde hiçbir şirkete ait veri bulunamadı.'}), 404
+
+    # ── Pass 2: aggregate + build Excel per (company, employer) ──
+    zip_buf   = io.BytesIO()
+    generated = []
+    errors    = []
+
+    with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for employer_key in ('AP-CB', 'BALTIC'):
+            _, ns_region = _employer_meta(employer_key)
+            folder_name  = f'{employer_key} Hakediş'
+
+            for comp in sorted(c for (c, e) in combo_set if e == employer_key):
+                try:
+                    # Collect all year-to-date records for this company + region
+                    matching = []
+                    for r in all_records:
+                        if _safe_str(r.get('Company')) != comp:
+                            continue
+                        rec_ns = _safe_str(
+                            r.get('North/ South', '') or r.get('North/South', '')
+                        ).strip()
+                        if ns_region and rec_ns and rec_ns != ns_region:
+                            continue
+                        rec_date = _parse_record_date(r)
+                        if rec_date and year_start <= rec_date <= end_date:
+                            matching.append(r)
+
+                    if not matching:
+                        continue
+
+                    # Aggregation (mirrors generate_hakedis logic exactly)
+                    current_sum  = defaultdict(float)
+                    current_mh   = defaultdict(float)
+                    current_pers = defaultdict(set)
+                    previous_sum = defaultdict(float)
+                    previous_mh  = defaultdict(float)
+                    pp_months    = defaultdict(set)
+                    disciplines  = defaultdict(set)
+                    scopes_d     = defaultdict(set)
+                    person_detail = defaultdict(lambda: defaultdict(lambda: {
+                        'cur_mh': 0.0, 'cur_total': 0.0,
+                        'prev_mh': 0.0, 'prev_total': 0.0,
+                        'rate': None, 'currency': '',
+                    }))
+
+                    for r in matching:
+                        rec_date = _parse_record_date(r)
+                        if not rec_date:
+                            continue
+                        project  = (_safe_str(r.get('Projects')) or
+                                    _safe_str(r.get('Projects/Group')) or 'Unknown')
+                        mh       = _safe_float(r.get('TOTAL_MH')) or _get_mh(r)
+                        disc     = _safe_str(r.get('Discipline'))
+                        scope    = _get_kapsam(r) or _safe_str(r.get('Scope'))
+                        person   = _safe_str(r.get('Name Surname'))
+                        pid      = r.get('ID')
+
+                        if use_hourly_rates:
+                            h_rate, h_curr = _get_hourly_rate(person, rec_date, pid)
+                            if h_rate and h_rate > 0:
+                                if h_curr in ('TL', 'TRY'):
+                                    nihai = h_rate
+                                else:
+                                    kur   = _get_exchange_rate(rec_date) or usd_to_tl or 1.0
+                                    nihai = h_rate * kur
+                                satir = mh * nihai
+                            else:
+                                satir = 0.0
+                        else:
+                            eff   = (_get_exchange_rate(rec_date) if use_auto_rate else usd_to_tl) or 1.0
+                            satir = mh * eff
+
+                        if year_start <= rec_date <= end_date:
+                            pp_months[project].add((rec_date.year, rec_date.month))
+
+                        if start_date <= rec_date <= end_date:
+                            current_sum[project]  += satir
+                            current_mh[project]   += mh
+                            current_pers[project].add(person)
+                            if disc:   disciplines[project].add(disc)
+                            if scope:  scopes_d[project].add(scope)
+                            if person:
+                                pd = person_detail[project][person]
+                                pd['cur_mh']    += mh
+                                pd['cur_total'] += satir
+                                if use_hourly_rates and h_rate:
+                                    pd['rate']     = h_rate
+                                    pd['currency'] = h_curr
+                        elif year_start <= rec_date <= day_before:
+                            previous_sum[project] += satir
+                            previous_mh[project]  += mh
+                            if person:
+                                pd = person_detail[project][person]
+                                pd['prev_mh']    += mh
+                                pd['prev_total'] += satir
+                                if use_hourly_rates and h_rate and pd['rate'] is None:
+                                    pd['rate']     = h_rate
+                                    pd['currency'] = h_curr
+
+                    all_projects = sorted(set(current_sum.keys()) | set(previous_sum.keys()))
+                    if not all_projects:
+                        continue
+
+                    rows_out = []
+                    for proj in all_projects:
+                        ch = current_sum[proj]
+                        ph = previous_sum[proj]
+                        rows_out.append({
+                            'project':           proj,
+                            'ppNo':              len(pp_months.get(proj, set())),
+                            'currentMH':         round(current_mh[proj], 2),
+                            'currentHakedis':    round(ch, 2),
+                            'previousMH':        round(previous_mh[proj], 2),
+                            'previousHakedis':   round(ph, 2),
+                            'cumulativeHakedis': round(ch + ph, 2),
+                            'disciplines':       sorted(disciplines.get(proj, set())),
+                            'scope':             sorted(scopes_d.get(proj, set())),
+                            'personCount':       len(current_pers.get(proj, set())),
+                        })
+                    rows_out.sort(key=lambda x: x['project'])
+
+                    totals_out = {
+                        'project':           'TOPLAM', 'ppNo': '',
+                        'currentMH':         round(sum(x['currentMH']         for x in rows_out), 2),
+                        'currentHakedis':    round(sum(x['currentHakedis']    for x in rows_out), 2),
+                        'previousMH':        round(sum(x['previousMH']        for x in rows_out), 2),
+                        'previousHakedis':   round(sum(x['previousHakedis']   for x in rows_out), 2),
+                        'cumulativeHakedis': round(sum(x['cumulativeHakedis'] for x in rows_out), 2),
+                        'disciplines': [], 'scope': [], 'personCount': '',
+                    }
+
+                    # Look up contract(s) from Hakedis Excel for this company + year;
+                    # try exact match → case-insensitive → normalized partial → broadcast (no FIRMA col) → DB fallback
+                    contract_nos = (
+                        hakedis_contracts_map.get(comp)
+                        or next((v for k, v in hakedis_contracts_map.items()
+                                 if k and k.lower() == comp.lower()), None)
+                        or next((v for k, v in hakedis_contracts_map.items()
+                                 if k and (_bn(k) in _bn(comp) or _bn(comp) in _bn(k))), None)
+                        or hakedis_contracts_map.get('')   # broadcast when no FIRMA column
+                        or sorted({
+                            _safe_str(r.get('İşveren- Sözleşme No', ''))
+                            for r in matching
+                            if _safe_str(r.get('İşveren- Sözleşme No', ''))
+                        })
+                    ) or []
+
+                    # Filter by employer keyword: AP-CB → keep only *-APC-* contracts,
+                    # BALTIC → keep only *-BAL-* contracts
+                    emp_kw = (_EMPLOYER_KEYWORD_MAP.get(employer_key) or {}).get('contract_kw', '')
+                    if emp_kw and contract_nos:
+                        filtered = [c for c in contract_nos if emp_kw.upper() in c.upper()]
+                        if filtered:  # only apply filter if it leaves at least one result
+                            contract_nos = filtered
+
+                    meta_out = {
+                        'company':        company_name_map.get(comp, comp),
+                        'employer':       company_name_map.get(employer_key, employer_key),
+                        'contractNo':     ', '.join(contract_nos),
+                        'startDate':      start_str,
+                        'endDate':        end_str,
+                        'reportDate':     report_date.strftime('%Y-%m-%d'),
+                        'periodText':     period_text,
+                        'totalRecords':   len(matching),
+                        'currentRecords': sum(
+                            1 for r in matching
+                            if (d := _parse_record_date(r)) and start_date <= d <= end_date
+                        ),
+                        'currency':       output_currency,
+                        'usdToTlRate':    usd_to_tl if usd_to_tl > 0 else None,
+                        'autoRate':       use_auto_rate,
+                        'hourlyRates':    use_hourly_rates,
+                        'nsRegion':       ns_region,
+                    }
+
+                    excel_bytes  = _build_excel(rows_out, totals_out, meta_out, dict(person_detail))
+                    safe_name    = comp.replace(' ', '_').replace('/', '-')
+                    zip_path     = f'{folder_name}/{safe_name}_{start_str[:7]}.xlsx'
+                    zf.writestr(zip_path, excel_bytes)
+                    generated.append({'company': comp, 'employer': employer_key})
+
+                except Exception as exc:
+                    errors.append(f'{comp} ({employer_key}): {exc}')
+
+    if not generated:
+        msg = 'Hiçbir Excel oluşturulamadı.'
+        if errors:
+            msg += ' Hatalar: ' + '; '.join(errors)
+        return jsonify({'success': False, 'error': msg}), 500
+
+    zip_buf.seek(0)
+    return send_file(
+        zip_buf,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=f'Toplu_Hakedis_{start_str[:7]}.zip',
+    )
+
+
+# ---------------------------------------------------------------------------
 # Multi-Excel upload / status / delete endpoints
 # ---------------------------------------------------------------------------
 

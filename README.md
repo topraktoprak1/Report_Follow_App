@@ -83,6 +83,8 @@ The application is divided into three functional modules:
 * **Proje Rapor Dağılımı:** Visual report distribution.
 * **Proje Öngörü Raporu:** Data-driven forecasting.
 * **Personel Analiz Raporları:** Individual performance metrics.
+* * **Progress Payment Report:** Monthly progress payment section.
+* * **Advanced Analysis:** Configurable analysis section.
 
 ### 📝 Operations & Logs
 
@@ -120,3 +122,4 @@ The application is divided into three functional modules:
 | `DELETE` | `/api/users/:id` | Soft-delete/Deactivate user |
 
 ---
+
