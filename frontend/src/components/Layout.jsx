@@ -83,7 +83,7 @@ export default function Layout() {
                 <header className="header">
                     <div className="header-left">
                         <div className="header-breadcrumb">
-                            <span>ANTI-KARMA</span> — Veri Analiz Platformu
+                            <span>BETA</span> — Veri Analiz Platformu
                         </div>
                     </div>
                     <div className="header-right">

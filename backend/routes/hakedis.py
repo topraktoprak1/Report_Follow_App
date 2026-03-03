@@ -783,6 +783,9 @@ def bulk_generate_hakedis(current_user=None):
         comp = _safe_str(r.get('Company', ''))
         if not comp:
             continue
+        # Skip companies that are themselves employers (AP-CB, BALTIC, etc.)
+        if comp.strip().upper() in {k.upper() for k in _EMPLOYER_KEYWORD_MAP}:
+            continue
         ns       = _safe_str(r.get('North/ South', '') or r.get('North/South', '')).strip()
         contract = _safe_str(r.get('İşveren- Sözleşme No', '')).upper()
         if ns == 'South' or 'APC' in contract:
@@ -1736,8 +1739,25 @@ def _build_excel(rows, totals, meta, person_detail=None):
 
     NC = 5   # number of columns: A=Work Def, B=PP No, C=Cumulative, D=Previous, E=This Period
 
+    # ── Project name prefix encoder ───────────────────────────────────────────
+    _PROJECT_PREFIX_MAP = [
+        ('USTLUGA', '03'),   # longer prefixes first to avoid partial matches
+        ('MNLG',    '02'),
+        ('GBS',     '01'),
+    ]
+    def _encode_project(name):
+        """Replace known project prefixes with numeric codes, e.g. USTLUGA → 03."""
+        if not name:
+            return name
+        upper = name.upper()
+        for prefix, code in _PROJECT_PREFIX_MAP:
+            if upper.startswith(prefix):
+                return code + name[len(prefix):]
+        return name
+
     # ── Column widths ────────────────────────────────────────────────────────
-    for i, w in enumerate([52, 10, 24, 24, 24], start=1):
+    # Col1: longest project name ~34 chars; cols 2-5: compact for numbers + wrapped headers
+    for i, w in enumerate([34, 13, 17, 19, 17], start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
     # ── Helper factories ─────────────────────────────────────────────────────
@@ -1751,8 +1771,8 @@ def _build_excel(rows, totals, meta, person_detail=None):
     THIN  = _border()
     THICK = _border('medium', '000000')
 
-    def _cell(row, col, value='', bold=False, italic=False, size=10,
-              fg='000000', bg=None, halign='left', fmt=None, wrap=False):
+    def _cell(row, col, value='', bold=False, italic=False, size=11,
+              fg='000000', bg=None, halign='left', fmt=None, wrap=True):
         c = ws.cell(row=row, column=col, value=value)
         c.font = Font(bold=bold, italic=italic, color=fg, size=size)
         c.alignment = Alignment(horizontal=halign, vertical='center', wrap_text=wrap)
@@ -1780,9 +1800,9 @@ def _build_excel(rows, totals, meta, person_detail=None):
     _merge(r, 1, NC)
     c = _cell(r, 1,
               f'{company} Hakedis Raporu / Progress Payment',
-              bold=True, size=12, fg=WHITE, bg=NAVY, halign='center')
+              bold=True, size=13, fg=WHITE, bg=NAVY, halign='center')
     c.border = THIN
-    _row_h(r, 26)
+    _row_h(r, 32)
     r += 1
 
     # ── Info block ────────────────────────────────────────────────────────────
@@ -1795,10 +1815,18 @@ def _build_excel(rows, totals, meta, person_detail=None):
         ('TARİH / DATE OF ISSUE:',       meta.get('reportDate', '')),
     ]
     for label, val in info_pairs:
-        _cell(r, 1, label, bold=True)
+        lc = _cell(r, 1, label, bold=True)
+        lc.border = THIN
         _merge(r, 2, NC)
-        _cell(r, 2, val)
-        _row_h(r, 15)
+        vc = _cell(r, 2, val, wrap=True)
+        vc.border = THIN
+        # Apply border to all merged cells in cols 3-NC
+        for col in range(3, NC + 1):
+            ws.cell(row=r, column=col).border = THIN
+        # Dynamic height: merged value cols ~65 printable chars wide at size 11
+        val_str = str(val) if val else ''
+        lines = max(1, -(-len(val_str) // 65))
+        _row_h(r, max(20, lines * 18))
         r += 1
 
     r += 1  # blank spacer
@@ -1806,20 +1834,20 @@ def _build_excel(rows, totals, meta, person_detail=None):
     # ── SECTION A ─────────────────────────────────────────────────────────────
     _merge(r, 1, NC)
     c = _cell(r, 1, 'A - Yapılan İşin Bedeli / Actual Cost for Work Performed',
-              bold=True, size=11, fg=WHITE, bg=NAVY, halign='left')
+              bold=True, size=12, fg=WHITE, bg=NAVY, halign='left')
     c.border = THIN
-    _row_h(r, 20)
+    _row_h(r, 24)
     r += 1
 
     # Table column headers
     col_headers = [
         'Work Definition / İş Tanımı',
-        'Hakediş No /\nProgress\nPayment No',
-        f'Kümülatif Hakediş Tutarı /\nCumulative Progress\nPayment ({cur_label})',
-        f'Bir Önceki Kümülatif Hakediş Tutarı /\nPrevious Period\nProgress Payment ({cur_label})',
-        f'Bu Dönem Hakediş Tutarı /\nThis Period\nProgress Payment ({cur_label})',
+        'Hakediş No / Progress Payment No',
+        f'Kümülatif Hakediş Tutarı / Cumulative Progress Payment ({cur_label})',
+        f'Bir Önceki Kümülatif Hakediş Tutarı / Previous Period Progress Payment ({cur_label})',
+        f'Bu Dönem Hakediş Tutarı / This Period Progress Payment ({cur_label})',
     ]
-    _row_h(r, 50)
+    _row_h(r, 80)
     for col, hdr in enumerate(col_headers, start=1):
         c = _cell(r, col, hdr, bold=True, fg=WHITE, bg=COL_HDR,
                   halign='center', wrap=True)
@@ -1829,8 +1857,8 @@ def _build_excel(rows, totals, meta, person_detail=None):
     # Data rows
     for i, row_data in enumerate(rows):
         row_bg = WHITE if i % 2 == 0 else GREY_ROW
-        _row_h(r, 16)
-        c1 = _cell(r, 1, row_data['project'], bg=row_bg, halign='left');  c1.border = THIN
+        _row_h(r, 20)
+        c1 = _cell(r, 1, _encode_project(row_data['project']), bg=row_bg, halign='left');  c1.border = THIN
         c2 = _cell(r, 2,
                    f"PP-{row_data['ppNo']}" if row_data['ppNo'] else '',
                    bg=row_bg, halign='center');                            c2.border = THIN
@@ -1843,7 +1871,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
         r += 1
 
     # Sub-total row (dash label, bold values)
-    _row_h(r, 16)
+    _row_h(r, 20)
     for col in range(1, NC + 1):
         ws.cell(row=r, column=col).border = THIN
     _cell(r, 1, '-')
@@ -1858,7 +1886,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
     vat_current = totals['currentHakedis'] * 0.20
 
     # KDV / VAT 20%
-    _row_h(r, 16)
+    _row_h(r, 20)
     _cell(r, 1, 'KDV / VAT 20%', bold=True).border = THIN
     for col in range(2, NC + 1):
         ws.cell(row=r, column=col).border = THIN
@@ -1873,7 +1901,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
     total_with_vat_current = totals['currentHakedis'] + vat_current
 
     # Toplam / Total
-    _row_h(r, 18)
+    _row_h(r, 24)
     _cell(r, 1, 'Toplam / Total', bold=True, bg=TOTAL_BG).border = THIN
     ws.cell(row=r, column=2).fill = _fill(TOTAL_BG); ws.cell(row=r, column=2).border = THIN
     _cell(r, 3, total_with_vat_cumulative, bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THIN
@@ -1886,9 +1914,9 @@ def _build_excel(rows, totals, meta, person_detail=None):
     # ── SECTION B: KESINTILER ─────────────────────────────────────────────────
     _merge(r, 1, NC)
     c = _cell(r, 1, 'B - Kesintiler / Deductions',
-              bold=True, size=11, fg=WHITE, bg=NAVY, halign='left')
+              bold=True, size=12, fg=WHITE, bg=NAVY, halign='left')
     c.border = THIN
-    _row_h(r, 20)
+    _row_h(r, 24)
     r += 1
 
     # Section B column headers
@@ -1896,7 +1924,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
     ws.cell(row=r, column=1).fill = _fill(COL_HDR); ws.cell(row=r, column=1).border = THIN
     for col, lbl in [(3, 'Cumulative'), (4, 'Previous Period'), (5, 'This Period')]:
         _cell(r, col, lbl, bold=True, fg=WHITE, bg=COL_HDR, halign='center').border = THIN
-    _row_h(r, 18)
+    _row_h(r, 22)
     r += 1
 
     # Kesintiler row
@@ -1905,7 +1933,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
     ws.cell(row=r, column=2).border = THIN
     for col in (3, 4, 5):
         _cell(r, col, 0, halign='center', fmt=HAK_FMT).border = THIN
-    _row_h(r, 16)
+    _row_h(r, 20)
     r += 1
 
     # Kesintiler Toplamı
@@ -1914,7 +1942,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
     ws.cell(row=r, column=2).fill = _fill(TOTAL_BG); ws.cell(row=r, column=2).border = THIN
     for col in (3, 4, 5):
         _cell(r, col, 0, bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THIN
-    _row_h(r, 16)
+    _row_h(r, 20)
     r += 1
 
     r += 1  # spacer
@@ -1922,9 +1950,9 @@ def _build_excel(rows, totals, meta, person_detail=None):
     # ── SECTION C: NET PAYMENT ────────────────────────────────────────────────
     _merge(r, 1, NC)
     c = _cell(r, 1, 'C - Net Hakediş Tutarı / Net Progress Payment (C=A-B)',
-              bold=True, size=11, fg=WHITE, bg=NAVY, halign='left')
+              bold=True, size=12, fg=WHITE, bg=NAVY, halign='left')
     c.border = THIN
-    _row_h(r, 20)
+    _row_h(r, 24)
     r += 1
 
     # Net row (label spans cols 1-4, value in col 5)
@@ -1933,7 +1961,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
     for col in (2, 3, 4):
         ws.cell(row=r, column=col).border = THIN
     _cell(r, 5, total_with_vat_current, bold=True, halign='center', fmt=HAK_FMT).border = THIN
-    _row_h(r, 16)
+    _row_h(r, 20)
     r += 1
 
     # Toplam / Total Amount
@@ -1943,7 +1971,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
         ws.cell(row=r, column=col).fill = _fill(TOTAL_BG)
         ws.cell(row=r, column=col).border = THIN
     _cell(r, 5, total_with_vat_cumulative, bold=True, bg=TOTAL_BG, halign='center', fmt=HAK_FMT).border = THIN
-    _row_h(r, 16)
+    _row_h(r, 20)
     r += 1
 
     r += 2  # spacer before footer
@@ -1951,25 +1979,34 @@ def _build_excel(rows, totals, meta, person_detail=None):
     # ── FOOTER ────────────────────────────────────────────────────────────────
     _merge(r, 1, 2)
     c = ws.cell(row=r, column=1, value='PROJECİ / PROJECT DESIGNER')
-    c.font = Font(bold=True, color=NAVY)
-    c.alignment = Alignment(horizontal='center', vertical='center')
+    c.font = Font(bold=True, color=NAVY, size=11)
+    c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
     _merge(r, 4, 5)
     c = ws.cell(row=r, column=4, value='İŞVEREN / EMPLOYER')
-    c.font = Font(bold=True, color=NAVY)
-    c.alignment = Alignment(horizontal='center', vertical='center')
-    _row_h(r, 15)
+    c.font = Font(bold=True, color=NAVY, size=11)
+    c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    _row_h(r, 18)
     r += 1
 
     _merge(r, 1, 2)
     c = ws.cell(row=r, column=1, value=company)
+    c.font = Font(size=11)
     c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
     _merge(r, 4, 5)
     c = ws.cell(row=r, column=4, value=employer)
+    c.font = Font(size=11)
     c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-    _row_h(r, 32)
+    _row_h(r, 48)
 
     # Freeze under column headers (info block = 7 rows + 1 spacer = row 9)
     ws.freeze_panes = ws.cell(row=10, column=1)
+
+    # Print settings: fit all columns on one page
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToPage  = True
+    ws.page_setup.fitToWidth = 1   # 1 page wide
+    ws.page_setup.fitToHeight = 0  # unlimited pages tall
+    ws.page_setup.orientation = 'portrait'
 
     # Keep the old variables so Sheet 2 code still works
     MH_FMT = '#,##0.00'
@@ -2001,7 +2038,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
         ws2.row_dimensions[1].height = 30
         for col, hdr in enumerate(det_headers, start=1):
             cell = ws2.cell(row=1, column=col, value=hdr)
-            cell.font = Font(bold=True, color=WHITE, size=10)
+            cell.font = Font(bold=True, color=WHITE, size=11)
             cell.fill = fill(BLUE_DARK)
             cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
             cell.border = thin_border()
@@ -2076,6 +2113,13 @@ def _build_excel(rows, totals, meta, person_detail=None):
             ws2.column_dimensions[get_column_letter(i)].width = w
 
         ws2.freeze_panes = ws2.cell(row=2, column=1)
+
+        # Print settings: fit all columns on one page
+        ws2.sheet_properties.pageSetUpPr.fitToPage = True
+        ws2.page_setup.fitToPage  = True
+        ws2.page_setup.fitToWidth = 1
+        ws2.page_setup.fitToHeight = 0
+        ws2.page_setup.orientation = 'portrait'
 
     buf = io.BytesIO()
     wb.save(buf)

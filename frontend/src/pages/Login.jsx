@@ -100,7 +100,7 @@ export default function Login() {
         </form>
 
         <div className="login-footer">
-          <p>Varsayılan: admin@firma.com / admin123</p>
+          <p></p>
         </div>
       </div>
 
