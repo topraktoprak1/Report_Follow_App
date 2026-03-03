@@ -1,7 +1,7 @@
 
-#  ANTI-KARMA — Veri Analiz Platformu
+#  BETA — Veri Analiz Platformu
 
-**Anti-Karma** is a comprehensive full-stack data analysis platform designed with a robust role-based access control (RBAC) system. It streamlines project reporting, personnel analysis, and administrative oversight.
+**Beta** is a comprehensive full-stack data analysis platform designed with a robust role-based access control (RBAC) system. It streamlines project reporting, personnel analysis, and administrative oversight.
 
 ---
 
@@ -122,4 +122,5 @@ The application is divided into three functional modules:
 | `DELETE` | `/api/users/:id` | Soft-delete/Deactivate user |
 
 ---
+
 
