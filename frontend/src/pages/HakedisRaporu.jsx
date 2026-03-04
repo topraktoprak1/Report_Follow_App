@@ -2,7 +2,7 @@
 import {
     FileSpreadsheet, Download, Loader2, Search, AlertCircle,
     Building2, FileText, Calendar, RefreshCw, Upload, Database,
-    CheckCircle2, BookOpen,
+    CheckCircle2, BookOpen, Eye, X,
 } from 'lucide-react';
 import { hakedisApi } from '../api/hakedis.js';
 
@@ -23,6 +23,102 @@ function InfoCard({ label, value }) {
     );
 }
 
+// ─── Excel Preview Modal ─────────────────────────────────────────────────────
+
+function ExcelPreviewModal({ label, excelType, onClose }) {
+    const [loading, setLoading] = useState(true);
+    const [data,    setData]    = useState(null);
+    const [error,   setError]   = useState(null);
+
+    useEffect(() => {
+        hakedisApi.getExcelPreview(excelType).then(res => {
+            if (res.success) setData(res);
+            else setError(res.error || 'Veri alınamadı');
+            setLoading(false);
+        });
+    }, [excelType]);
+
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,.45)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', padding: 24,
+        }} onClick={onClose}>
+            <div style={{
+                background: 'white', borderRadius: 14, width: '96vw', maxWidth: 1200,
+                maxHeight: '88vh', display: 'flex', flexDirection: 'column',
+                boxShadow: '0 20px 60px rgba(0,0,0,.25)', overflow: 'hidden',
+            }} onClick={e => e.stopPropagation()}>
+
+                {/* Header */}
+                <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '16px 20px', borderBottom: '1px solid #e2e8f0', flexShrink: 0,
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Eye size={16} color='#2563eb' />
+                        <span style={{ fontWeight: 700, fontSize: 14, color: '#1e293b' }}>Önizleme — {label}</span>
+                        {data && (
+                            <span style={{ fontSize: 11, color: '#64748b', background: '#f1f5f9', borderRadius: 6, padding: '2px 8px' }}>
+                                {data.total} satır · {data.columns.length} sütun
+                            </span>
+                        )}
+                    </div>
+                    <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center' }}>
+                        <X size={18} />
+                    </button>
+                </div>
+
+                {/* Body */}
+                <div style={{ flex: 1, overflow: 'auto', padding: '0' }}>
+                    {loading && (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 48, color: '#64748b' }}>
+                            <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> Yükleniyor…
+                        </div>
+                    )}
+                    {error && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 32, color: '#dc2626' }}>
+                            <AlertCircle size={16} /> {error}
+                        </div>
+                    )}
+                    {data && (
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                            <thead>
+                                <tr style={{ background: '#f8fafc', position: 'sticky', top: 0, zIndex: 1 }}>
+                                    <th style={{ padding: '8px 12px', textAlign: 'right', color: '#94a3b8', fontWeight: 600, borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap', fontSize: 11 }}>#</th>
+                                    {data.columns.map((col, i) => (
+                                        <th key={i} style={{
+                                            padding: '8px 12px', textAlign: 'left', color: '#334155',
+                                            fontWeight: 700, borderBottom: '2px solid #e2e8f0',
+                                            whiteSpace: 'nowrap', maxWidth: 200, overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                        }} title={col}>{col}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {data.rows.map((row, ri) => (
+                                    <tr key={ri} style={{ background: ri % 2 === 0 ? 'white' : '#f8fafc' }}>
+                                        <td style={{ padding: '6px 12px', color: '#94a3b8', textAlign: 'right', borderBottom: '1px solid #f1f5f9', fontWeight: 500, fontSize: 11 }}>{ri + 1}</td>
+                                        {row.map((cell, ci) => (
+                                            <td key={ci} style={{
+                                                padding: '6px 12px', color: '#1e293b',
+                                                borderBottom: '1px solid #f1f5f9',
+                                                maxWidth: 240, overflow: 'hidden',
+                                                textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                            }} title={String(cell)}>{cell === '' ? <span style={{ color: '#cbd5e1' }}>—</span> : String(cell)}</td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── Excel Upload Stations ────────────────────────────────────────────────────
 
 const EXCEL_SLOT_CONFIG = [
@@ -38,6 +134,7 @@ function ExcelUploadStations({ onAnyUpload, onStatusChange }) {
     const [statuses,  setStatuses]  = useState({});
     const [uploading, setUploading] = useState({});
     const [errors,    setErrors]    = useState({});
+    const [preview,   setPreview]   = useState(null); // { key, label }
 
     const applyStatuses = (newStatuses) => {
         setStatuses(newStatuses);
@@ -80,6 +177,7 @@ function ExcelUploadStations({ onAnyUpload, onStatusChange }) {
     const uploadedCount = Object.values(statuses).filter(s => s?.uploaded).length;
 
     return (
+        <>
         <div style={{ background: 'white', borderRadius: 14, border: '1px solid #e2e8f0', padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,.06)', marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                 <FileSpreadsheet size={16} color="#2563eb" />
@@ -130,6 +228,12 @@ function ExcelUploadStations({ onAnyUpload, onStatusChange }) {
                                             </span>
                                         </div>
                                         <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+                                            <button
+                                                onClick={() => setPreview({ key, label })}
+                                                style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '3px 7px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 5, fontSize: 11, color: '#16a34a', fontWeight: 600, cursor: 'pointer' }}
+                                            >
+                                                <Eye size={11} /> Önizleme
+                                            </button>
                                             <label htmlFor={inputId} style={{ cursor: 'pointer', padding: '3px 7px', background: color + '18', borderRadius: 5, fontSize: 11, color, fontWeight: 600 }}>
                                                 ↑ Değiştir
                                             </label>
@@ -190,6 +294,14 @@ function ExcelUploadStations({ onAnyUpload, onStatusChange }) {
                 })}
             </div>
         </div>
+        {preview && (
+            <ExcelPreviewModal
+                label={preview.label}
+                excelType={preview.key}
+                onClose={() => setPreview(null)}
+            />
+        )}
+        </>
     );
 }
 

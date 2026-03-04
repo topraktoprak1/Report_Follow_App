@@ -1,0 +1,9 @@
+[EXCEL STORE RESTORE] Restored "database" from C:\Users\teknik.ofis\Desktop\Report_Follow_App\backend\routes\..\uploads\hakedis_database.xlsx
+[EXCEL STORE RESTORE] Restored "hourly_rates" from C:\Users\teknik.ofis\Desktop\Report_Follow_App\backend\routes\..\uploads\hakedis_hourly_rates.xlsx
+[EXCEL STORE RESTORE] Restored "hakedis" from C:\Users\teknik.ofis\Desktop\Report_Follow_App\backend\routes\..\uploads\hakedis_hakedis.xlsx
+[EXCEL STORE RESTORE] Restored "doviz_kurlari" from C:\Users\teknik.ofis\Desktop\Report_Follow_App\backend\routes\..\uploads\hakedis_doviz_kurlari.xlsx
+[EXCEL STORE RESTORE] Restored "sirket_isimleri" from C:\Users\teknik.ofis\Desktop\Report_Follow_App\backend\routes\..\uploads\hakedis_sirket_isimleri.xlsx
+[EXCEL STORE RESTORE] Restored "info" from C:\Users\teknik.ofis\Desktop\Report_Follow_App\backend\routes\..\uploads\hakedis_info.xlsx
+[OK] Database initialized
+ * Serving Flask app 'app'
+ * Debug mode: off

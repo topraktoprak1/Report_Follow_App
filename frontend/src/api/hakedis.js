@@ -82,6 +82,16 @@ export const hakedisApi = {
         return res.data;
     },
 
+    /** GET /api/hakedis/preview-excel/<type> → { columns, rows, total } */
+    getExcelPreview: async (excelType) => {
+        try {
+            const res = await client.get(`${BASE}/preview-excel/${excelType}`);
+            return res.data;
+        } catch (err) {
+            return { success: false, error: err?.response?.data?.error || err.message };
+        }
+    },
+
     /** GET /api/hakedis/access-structure → last parsed structure */
     getAccessStructure: async () => {
         try {

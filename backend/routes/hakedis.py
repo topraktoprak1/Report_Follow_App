@@ -82,6 +82,43 @@ MONTH_MAP = {
 
 
 def _load_records():
+    """
+    Load personnel/cost records.
+    Priority:
+      1. Hakedis DATABASE Excel (uploaded via the Hakedis page) — always most up-to-date.
+      2. PostgreSQL DatabaseRecord table — fallback if no Excel is uploaded.
+    """
+    db_store = _excel_store.get('database')
+    if db_store and os.path.exists(db_store.get('path', '')):
+        try:
+            import pandas as pd
+            path = db_store['path']
+            xl = pd.ExcelFile(path)
+            # Prefer a sheet called DATABASE / Database; else use first sheet
+            sheet_name = next(
+                (s for s in xl.sheet_names if s.strip().upper() == 'DATABASE'),
+                xl.sheet_names[0]
+            )
+            df = pd.read_excel(path, sheet_name=sheet_name, dtype=str)
+            df = df.fillna('')
+            # Drop rows where every cell is empty
+            df = df[df.apply(lambda r: any(v.strip() for v in r.values if isinstance(v, str)), axis=1)]
+            records = df.to_dict('records')
+            # Normalise: strip whitespace from all string values, replace 'nan'/'NaT'
+            _bad = {'nan', 'NaT', 'None', 'none'}
+            cleaned = []
+            for rec in records:
+                cleaned.append({
+                    k: ('' if str(v).strip() in _bad else str(v).strip())
+                    for k, v in rec.items()
+                })
+            if cleaned:
+                print(f'[_load_records] Using DATABASE Excel: {len(cleaned)} rows from {db_store["filename"]}')
+                return cleaned
+        except Exception as e:
+            print(f'[_load_records] Excel read failed ({e}), falling back to PostgreSQL')
+
+    # Fallback: PostgreSQL
     rows = DatabaseRecord.query.all()
     out = []
     for r in rows:
@@ -89,6 +126,7 @@ def _load_records():
             out.append(json.loads(r.data))
         except Exception:
             continue
+    print(f'[_load_records] Using PostgreSQL: {len(out)} rows')
     return out
 
 
@@ -110,7 +148,8 @@ def _parse_record_date(record):
     """Parse the (Week / Month) field → datetime.date or None.
     Tries all known column name variants created by different Excel exports.
     """
-    raw = (_safe_str(record.get('(Week /\nMonth)', '')) or
+    raw = (_safe_str(record.get('(Week / \nMonth)', '')) or   # space before \n  (new Excel)
+           _safe_str(record.get('(Week /\nMonth)', '')) or    # no space before \n
            _safe_str(record.get('(Week / Month)', '')) or
            _safe_str(record.get('(Week /\n Month)', '')) or
            _safe_str(record.get('Week / Month', '')) or
@@ -233,23 +272,21 @@ def _employer_meta(employer_str):
 
 def _get_rate_cols_for_date(year, month):
     """
-    Return (rate_column, currency_column) matching VBA Select Case logic.
-    Column names are flattened from the two-row merged Excel header:
-      parent label + " " + sub-header, e.g. "2023-2024 Currency  1".
-    The Turkish dot-I (İ) is used as it appears in the Excel header rows.
-      2023, 2024         → "2023-2024 Hourly Base Rates 1"   / "2023-2024 Currency  1"
-      2025 month ≤ 6     → "2025 İlk 6 ay Hourly Base Rates 2" / "2025 İlk 6 ay Currency  2"
-      2025 month > 6     → "2025 İkinci 6 ay Hourly Base Rates 3" / "2025 İkinci 6 ay Currency  3"
-      2026+              → "2026 İlk 6 ay Hourly Base Rates 2"   / "2026 İlk 6 ay Currency  5"
+    Return (rate_column, currency_column) based on work date year/month.
+    Column names match the current hourly_rates Excel headers:
+      2023, 2024         → "23-24_Base_Rate_1"       / "23-24 Cur_1"
+      2025 month ≤ 6     → "25_ilk6_Base_Rate_2"     / "25_ilk6_Cur_2"
+      2025 month >  6     → "25_ikinci6_Base_Rate_3"  / "25_ikinci6_Cur_3"
+      2026+              → "26_ilk6_Base_Rate_4"      / "26_ilk6_Cur_4"
     """
     if year in (2023, 2024):
-        return "2023-2024 Hourly Base Rates 1", "2023-2024 Currency  1"
+        return "23-24_Base_Rate_1", "23-24 Cur_1"
     elif year == 2025 and month <= 6:
-        return "2025 İlk 6 ay Hourly Base Rates 2", "2025 İlk 6 ay Currency  2"
+        return "25_ilk6_Base_Rate_2", "25_ilk6_Cur_2"
     elif year == 2025 and month > 6:
-        return "2025 İkinci 6 ay Hourly Base Rates 3", "2025 İkinci 6 ay Currency  3"
+        return "25_ikinci6_Base_Rate_3", "25_ikinci6_Cur_3"
     elif year >= 2026:
-        return "2026 İlk 6 ay Hourly Base Rates 2", "2026 İlk 6 ay Currency  5"
+        return "26_ilk6_Base_Rate_4", "26_ilk6_Cur_4"
     return None, None
 
 
@@ -471,7 +508,7 @@ def generate_hakedis(current_user=None):
             continue
         # Regional filter: AP-CB → South, BALTIC → North
         if ns_region:
-            rec_region = _safe_str(r.get('North/ South', '') or r.get('North/South', '')).strip()
+            rec_region = _safe_str(r.get('North/\nSouth', '') or r.get('North/ South', '') or r.get('North/South', '')).strip()
             if rec_region and rec_region != ns_region:
                 continue
         # Optional scope filter
@@ -786,11 +823,15 @@ def bulk_generate_hakedis(current_user=None):
         # Skip companies that are themselves employers (AP-CB, BALTIC, etc.)
         if comp.strip().upper() in {k.upper() for k in _EMPLOYER_KEYWORD_MAP}:
             continue
-        ns       = _safe_str(r.get('North/ South', '') or r.get('North/South', '')).strip()
+        ns       = _safe_str(r.get('North/\nSouth', '') or r.get('North/ South', '') or r.get('North/South', '')).strip()
         contract = _safe_str(r.get('İşveren- Sözleşme No', '')).upper()
         if ns == 'South' or 'APC' in contract:
             combo_set.add((comp, 'AP-CB'))
         elif ns == 'North' or 'BAL' in contract:
+            combo_set.add((comp, 'BALTIC'))
+        else:
+            # Fallback: assign to both employers if region can't be determined
+            combo_set.add((comp, 'AP-CB'))
             combo_set.add((comp, 'BALTIC'))
 
     if not combo_set:
@@ -814,7 +855,7 @@ def bulk_generate_hakedis(current_user=None):
                         if _safe_str(r.get('Company')) != comp:
                             continue
                         rec_ns = _safe_str(
-                            r.get('North/ South', '') or r.get('North/South', '')
+                            r.get('North/\nSouth', '') or r.get('North/ South', '') or r.get('North/South', '')
                         ).strip()
                         if ns_region and rec_ns and rec_ns != ns_region:
                             continue
@@ -950,6 +991,12 @@ def bulk_generate_hakedis(current_user=None):
                         if filtered:  # only apply filter if it leaves at least one result
                             contract_nos = filtered
 
+                    # Prefer addendum contracts (-Z01, -Z02, etc.) over base contracts.
+                    # If any contract ends with -Z followed by digits, keep only those.
+                    addendum = [c for c in contract_nos if re.search(r'-Z\d+$', c, re.IGNORECASE)]
+                    if addendum:
+                        contract_nos = addendum
+
                     meta_out = {
                         'company':        company_name_map.get(comp, comp),
                         'employer':       company_name_map.get(employer_key, employer_key),
@@ -1033,21 +1080,32 @@ def _read_excel_rows(excel_type):
         if sheet_name is None:
             sheet_name = xl.sheet_names[0]
 
-        # Hourly Rates Excel has a two-row merged header:
-        #   Row 0: year group labels (" 2023-2024 ", "2025 İlk 6 ay", …)
-        #   Row 1: sub-headers ("Currency  1", "Hourly Base Rates 1", "ID", …)
-        # Read with header=[0,1] so pandas gives MultiIndex columns, then flatten.
+        # Hourly Rates Excel: auto-detect single-row vs two-row merged header.
+        #   OLD format: Row 0 = year group labels (e.g. "2023-2024", "2025 İlk 6 ay")
+        #               Row 1 = sub-headers ("Currency 1", "Hourly Base Rates 1", …)
+        #   NEW format: Row 0 = actual column names (e.g. "23-24 Cur_1", "26_ilk6_Base_Rate_4")
         if excel_type == 'hourly_rates':
-            df = pd.read_excel(info['path'], sheet_name=sheet_name, header=[0, 1], dtype=str)
-            flat_cols = []
-            for parent, child in df.columns:
-                p = str(parent).strip()
-                c = str(child).strip()
-                if p.startswith('Unnamed') or p == '':
-                    flat_cols.append(c)
-                else:
-                    flat_cols.append(f'{p} {c}')
-            df.columns = flat_cols
+            # Peek at row 0 to decide
+            df_peek = pd.read_excel(info['path'], sheet_name=sheet_name, header=0, nrows=0, dtype=str)
+            peek_cols = [str(c).strip() for c in df_peek.columns]
+            # New format: columns already contain rate/currency keywords
+            _new_fmt_kw = ('_cur_', '_base_rate_', 'add_cur', 'add_rate', 'cur_1', 'base_rate_1')
+            is_new_fmt = any(any(kw in c.lower() for kw in _new_fmt_kw) for c in peek_cols)
+            if is_new_fmt:
+                # Single-row header — read directly
+                df = pd.read_excel(info['path'], sheet_name=sheet_name, header=0, dtype=str)
+            else:
+                # Old two-row merged header — MultiIndex flatten
+                df = pd.read_excel(info['path'], sheet_name=sheet_name, header=[0, 1], dtype=str)
+                flat_cols = []
+                for parent, child in df.columns:
+                    p = str(parent).strip()
+                    c = str(child).strip()
+                    if p.startswith('Unnamed') or p == '':
+                        flat_cols.append(c)
+                    else:
+                        flat_cols.append(f'{p} {c}')
+                df.columns = flat_cols
             df = df.fillna('')
             # Drop rows that are entirely empty
             df = df[df.apply(lambda r: any(v.strip() for v in r.values if isinstance(v, str)), axis=1)]
@@ -1076,6 +1134,28 @@ def excel_status(current_user=None):
             'uploadedAt':  stored['uploaded_at'] if stored else None,
         }
     return jsonify({'success': True, 'data': result})
+
+
+@hakedis_bp.route('/preview-excel/<excel_type>', methods=['GET'])
+@role_required('admin', 'project_manager', 'team_leader')
+def preview_excel(excel_type, current_user=None):
+    """Return up to 200 rows from a stored Excel file for preview."""
+    if excel_type not in EXCEL_TYPES:
+        return jsonify({'success': False, 'error': f'Unknown type "{excel_type}"'}), 400
+    stored = _excel_store.get(excel_type)
+    if not stored:
+        return jsonify({'success': False, 'error': 'Not uploaded yet'}), 404
+    try:
+        import pandas as pd
+        path = stored['path']
+        xl   = pd.ExcelFile(path)
+        df   = pd.read_excel(path, sheet_name=xl.sheet_names[0], nrows=200, dtype=str)
+        df   = df.fillna('')
+        columns = list(df.columns)
+        rows    = df.values.tolist()
+        return jsonify({'success': True, 'columns': columns, 'rows': rows, 'total': len(rows)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @hakedis_bp.route('/upload-excel', methods=['POST'])
@@ -1841,7 +1921,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
 
     # Table column headers
     col_headers = [
-        'Work Definition / İş Tanımı',
+        'İş Tanımı / Work Definition ',
         'Hakediş No / Progress Payment No',
         f'Kümülatif Hakediş Tutarı / Cumulative Progress Payment ({cur_label})',
         f'Bir Önceki Kümülatif Hakediş Tutarı / Previous Period Progress Payment ({cur_label})',
@@ -2027,6 +2107,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
         # Header row
         det_headers = [
             'Personel',
+            'Proje',
             'Bu Dönem Toplam Çalışma',
             'Bu Dönem Hakediş Tutarı / This Period Progress Payment',
             'Geçmiş Dönem Toplam Çalışma',
@@ -2062,12 +2143,14 @@ def _build_excel(rows, totals, meta, person_detail=None):
 
                 vals = [
                     pname,
+                    _encode_project(proj),
                     cur_mh, cur_tot,
                     prev_mh, prev_tot,
                     cumul,
                     rate, currency,
                 ]
                 fmts = [
+                    None,
                     None,
                     MH_FMT, HAK_FMT,
                     MH_FMT, HAK_FMT,
@@ -2079,7 +2162,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
                     c.fill = row_fill
                     c.border = thin_border()
                     c.alignment = Alignment(
-                        horizontal='left' if col == 1 else 'right',
+                        horizontal='left' if col <= 2 else 'right',
                         vertical='center'
                     )
                     if fmt:
@@ -2092,14 +2175,16 @@ def _build_excel(rows, totals, meta, person_detail=None):
         ws2.cell(row=det_row, column=1, value='TOPLAM').font = Font(bold=True)
         ws2.cell(row=det_row, column=1).fill = total_row_fill
         ws2.cell(row=det_row, column=1).border = bold_border()
-        for col, idx in [(2, 'cur_mh'), (3, 'cur_total'), (4, 'prev_mh'),
-                         (5, 'prev_total'), (6, None)]:
+        ws2.cell(row=det_row, column=2).fill = total_row_fill
+        ws2.cell(row=det_row, column=2).border = bold_border()
+        for col, idx in [(3, 'cur_mh'), (4, 'cur_total'), (5, 'prev_mh'),
+                         (6, 'prev_total'), (7, None)]:
             if idx:
                 val = sum(pd[idx] for ps in person_detail.values() for pd in ps.values())
             else:  # cumulative
                 val = sum(pd['cur_total'] + pd['prev_total']
                           for ps in person_detail.values() for pd in ps.values())
-            fmt = MH_FMT if col in (2, 4) else HAK_FMT
+            fmt = MH_FMT if col in (3, 5) else HAK_FMT
             c = ws2.cell(row=det_row, column=col, value=val)
             c.font = Font(bold=True)
             c.fill = total_row_fill
@@ -2108,7 +2193,7 @@ def _build_excel(rows, totals, meta, person_detail=None):
             c.alignment = Alignment(horizontal='right', vertical='center')
 
         # Column widths sheet 2
-        det_widths = [30, 18, 32, 18, 38, 32, 14, 12]
+        det_widths = [28, 28, 18, 32, 18, 38, 32, 14, 12]
         for i, w in enumerate(det_widths, start=1):
             ws2.column_dimensions[get_column_letter(i)].width = w
 
